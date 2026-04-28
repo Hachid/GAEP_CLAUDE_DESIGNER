@@ -7,6 +7,13 @@ interface DescricaoMicProps {
   onChange: (value: string) => void
 }
 
+/**
+ * Textarea com botão de microfone flutuante para ditado por voz.
+ *
+ * Usa a Web Speech API (SpeechRecognition / webkitSpeechRecognition).
+ * Se a API não estiver disponível no browser, o botão fica silenciosamente inativo.
+ * O texto ditado é ANEXADO ao conteúdo existente (não substitui).
+ */
 export function DescricaoMic({ value, onChange }: DescricaoMicProps) {
   const [gravando, setGravando] = useState(false)
   const recognitionRef = useRef<SpeechRecognition | null>(null)

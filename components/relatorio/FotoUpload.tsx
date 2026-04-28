@@ -11,6 +11,14 @@ interface FotoUploadProps {
   onUpload: (urls: string[]) => void
 }
 
+/**
+ * Área de upload de fotos para o Supabase Storage.
+ *
+ * - Máximo de 3 fotos por relatório.
+ * - Nome do arquivo: `gaep-fotos/{codigo}/fotos/{DD-MM-AAAA}_{CATEGORIA}_{ATIVIDADE}_{N}.{ext}`
+ * - Exibe thumbnails 65×65px após o upload.
+ * - Fallback: se o upload falhar, o preview ainda aparece mas a URL não é enviada.
+ */
 export function FotoUpload({ gaepCodigo, categoria, atividade, data, onUpload }: FotoUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [previews, setPreviews] = useState<string[]>([])

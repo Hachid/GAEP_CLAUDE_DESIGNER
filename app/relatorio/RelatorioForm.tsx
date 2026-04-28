@@ -39,8 +39,52 @@ interface IAResponse {
   error?: string
 }
 
-type FeedbackTipo = 'ok' | 'err'
+interface Feedback {
+  tipo: 'ok' | 'err'
+  msg: string
+}
 
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  marginBottom: 6,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  color: '#64748b',
+  fontSize: '0.75rem',
+  letterSpacing: 0.5,
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '12px 14px',
+  background: '#f3f4f6',
+  border: '1px solid #e2e8f0',
+  color: '#1e293b',
+  borderRadius: 10,
+  fontSize: 15,
+  outline: 'none',
+  boxSizing: 'border-box',
+}
+
+/**
+ * Calcula o total de horas entre dois horários no formato "HH:MM".
+ * Suporta virada de meia-noite (ex.: 22:00 → 06:00 = 8h).
+ */
+function calcHorasTotais(horaInicio: string, horaFim: string): number {
+  if (!horaInicio || !horaFim) return 0
+  const [sh, sm] = horaInicio.split(':').map(Number)
+  const [eh, em] = horaFim.split(':').map(Number)
+  let mins = (eh * 60 + em) - (sh * 60 + sm)
+  if (mins < 0) mins += 24 * 60
+  return Math.round((mins / 60) * 100) / 100
+}
+
+/**
+ * Formulário interativo de Registro Operacional.
+ *
+ * Recebe todos os dados necessários como props (Server Component pai faz o fetch).
+ * Gerencia o fluxo completo: preenchimento → IA opcional → salvamento no Supabase.
+ */
 export function RelatorioForm({
   operadorAtual,
   gaepId,
@@ -51,6 +95,7 @@ export function RelatorioForm({
 }: RelatorioFormProps) {
   const hoje = new Date().toISOString().split('T')[0]
 
+  // ── Estado do formulário ──────────────────────────────────────
   const [data, setData] = useState(hoje)
   const [horaInicio, setHoraInicio] = useState('')
   const [horaFim, setHoraFim] = useState('')
@@ -60,25 +105,20 @@ export function RelatorioForm({
   const [equipe, setEquipe] = useState<string[]>(operadores.map((o) => o.id))
   const [fotosUrls, setFotosUrls] = useState<string[]>([])
   const [descricao, setDescricao] = useState('')
+
+  // ── Estado da UI ──────────────────────────────────────────────
   const [iaLoading, setIaLoading] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [descricaoRevisada, setDescricaoRevisada] = useState<string | null>(null)
-  const [feedback, setFeedback] = useState<{ tipo: FeedbackTipo; msg: string } | null>(null)
+  const [feedback, setFeedback] = useState<Feedback | null>(null)
 
+  // ── Derivados ─────────────────────────────────────────────────
   const atividadesFiltradas = atividades.filter((a) => a.categoria_id === categoriaId)
   const categoriaSelecionada = categorias.find((c) => c.id === categoriaId)
   const atividadeSelecionada = atividades.find((a) => a.id === atividadeId)
   const equipeNomes = operadores.filter((o) => equipe.includes(o.id)).map((o) => o.nome)
 
-  function calcHorasTotais(): number {
-    if (!horaInicio || !horaFim) return 0
-    const [sh, sm] = horaInicio.split(':').map(Number)
-    const [eh, em] = horaFim.split(':').map(Number)
-    let mins = (eh * 60 + em) - (sh * 60 + sm)
-    if (mins < 0) mins += 24 * 60
-    return Math.round((mins / 60) * 100) / 100
-  }
-
+  /** Salva o relatório sem passar pela IA (descrição bruta vira descrição oficial). */
   async function handleSalvarDireto() {
     if (!descricao.trim()) {
       setFeedback({ tipo: 'err', msg: 'Preencha a descrição antes de salvar.' })
@@ -86,30 +126,37 @@ export function RelatorioForm({
     }
     setSalvando(true)
     setFeedback(null)
-    const result = await salvarRelatorio({
-      gaepId,
-      relatoristId: operadorAtual.id,
-      data,
-      horaInicio,
-      horaFim,
-      horasTotais: calcHorasTotais(),
-      categoriaId,
-      atividadeId,
-      outrosIntegrantes,
-      descricaoBruta: descricao,
-      descricaoRevisada: descricao,
-      ocorrencias: '',
-      fotosUrls,
-      equipe,
-    })
-    setSalvando(false)
-    setFeedback(
-      result.error
-        ? { tipo: 'err', msg: result.error }
-        : { tipo: 'ok', msg: '✅ Operação registrada com sucesso!' }
-    )
+    try {
+      const result = await salvarRelatorio({
+        gaepId,
+        relatoristId: operadorAtual.id,
+        data,
+        horaInicio,
+        horaFim,
+        horasTotais: calcHorasTotais(horaInicio, horaFim),
+        categoriaId,
+        atividadeId,
+        outrosIntegrantes,
+        descricaoBruta: descricao,
+        descricaoRevisada: descricao,
+        ocorrencias: '',
+        fotosUrls,
+        equipe,
+      })
+      setFeedback(
+        result.error
+          ? { tipo: 'err', msg: result.error }
+          : { tipo: 'ok', msg: '✅ Operação registrada com sucesso!' }
+      )
+    } catch (err) {
+      console.error('[RelatorioForm] Erro inesperado ao salvar direto:', err)
+      setFeedback({ tipo: 'err', msg: 'Erro inesperado. Tente novamente.' })
+    } finally {
+      setSalvando(false)
+    }
   }
 
+  /** Envia a descrição bruta para o GPT-4o e exibe o texto revisado na AreaRevisao. */
   async function handleRedigirIA() {
     if (!descricao.trim()) {
       setFeedback({ tipo: 'err', msg: 'Preencha a descrição antes de redigir.' })
@@ -131,67 +178,63 @@ export function RelatorioForm({
           descricaoBruta: descricao,
         }),
       })
+
+      if (!res.ok) {
+        const errJson = (await res.json().catch(() => ({}))) as { error?: string }
+        setFeedback({ tipo: 'err', msg: errJson.error ?? `Erro HTTP ${res.status}` })
+        return
+      }
+
       const json = (await res.json()) as IAResponse
       if (json.error || !json.descricaoRevisada) {
-        setFeedback({ tipo: 'err', msg: json.error ?? 'Erro na IA.' })
+        setFeedback({ tipo: 'err', msg: json.error ?? 'A IA não retornou conteúdo.' })
       } else {
         setDescricaoRevisada(json.descricaoRevisada)
       }
-    } catch {
-      setFeedback({ tipo: 'err', msg: 'Falha ao conectar com a IA.' })
+    } catch (err) {
+      console.error('[RelatorioForm] Falha na chamada da IA:', err)
+      setFeedback({ tipo: 'err', msg: 'Falha ao conectar com o serviço de IA.' })
     } finally {
       setIaLoading(false)
     }
   }
 
+  /**
+   * Salva o relatório com o texto revisado (pós-IA) e as observações adicionais.
+   * Chamado pelo botão "Salvar & Consolidar Turno" dentro de AreaRevisao.
+   */
   async function handleSalvarConsolidado(descricaoFinal: string, ocorrencias: string) {
     setSalvando(true)
     setFeedback(null)
-    const result = await salvarRelatorio({
-      gaepId,
-      relatoristId: operadorAtual.id,
-      data,
-      horaInicio,
-      horaFim,
-      horasTotais: calcHorasTotais(),
-      categoriaId,
-      atividadeId,
-      outrosIntegrantes,
-      descricaoBruta: descricao,
-      descricaoRevisada: descricaoFinal,
-      ocorrencias,
-      fotosUrls,
-      equipe,
-    })
-    setSalvando(false)
-    if (result.error) {
-      setFeedback({ tipo: 'err', msg: result.error })
-    } else {
-      setFeedback({ tipo: 'ok', msg: '✅ Turno consolidado com sucesso!' })
-      setDescricaoRevisada(null)
+    try {
+      const result = await salvarRelatorio({
+        gaepId,
+        relatoristId: operadorAtual.id,
+        data,
+        horaInicio,
+        horaFim,
+        horasTotais: calcHorasTotais(horaInicio, horaFim),
+        categoriaId,
+        atividadeId,
+        outrosIntegrantes,
+        descricaoBruta: descricao,
+        descricaoRevisada: descricaoFinal,
+        ocorrencias,
+        fotosUrls,
+        equipe,
+      })
+      if (result.error) {
+        setFeedback({ tipo: 'err', msg: result.error })
+      } else {
+        setFeedback({ tipo: 'ok', msg: '✅ Turno consolidado com sucesso!' })
+        setDescricaoRevisada(null)
+      }
+    } catch (err) {
+      console.error('[RelatorioForm] Erro inesperado ao consolidar turno:', err)
+      setFeedback({ tipo: 'err', msg: 'Erro inesperado. Tente novamente.' })
+    } finally {
+      setSalvando(false)
     }
-  }
-
-  const labelStyle: React.CSSProperties = {
-    display: 'block',
-    marginBottom: 6,
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    color: '#64748b',
-    fontSize: '0.75rem',
-    letterSpacing: 0.5,
-  }
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '12px 14px',
-    background: '#f3f4f6',
-    border: '1px solid #e2e8f0',
-    color: '#1e293b',
-    borderRadius: 10,
-    fontSize: 15,
-    outline: 'none',
-    boxSizing: 'border-box',
   }
 
   return (
@@ -291,6 +334,7 @@ export function RelatorioForm({
       {/* Feedback */}
       {feedback && (
         <div
+          role={feedback.tipo === 'err' ? 'alert' : 'status'}
           style={{
             textAlign: 'center',
             padding: 14,
@@ -307,7 +351,7 @@ export function RelatorioForm({
         </div>
       )}
 
-      {/* Área revisão IA */}
+      {/* Área de revisão IA */}
       {descricaoRevisada && (
         <AreaRevisao
           descricaoRevisada={descricaoRevisada}

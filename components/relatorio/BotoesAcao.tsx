@@ -7,6 +7,13 @@ interface BotoesAcaoProps {
   salvando: boolean
 }
 
+/**
+ * Par de botões de ação do formulário de relatório.
+ *
+ * - "Salvar Direto": salva a descrição bruta sem passar pela IA.
+ * - "Redigir com IA": envia para o GPT-4o e abre a AreaRevisao.
+ * Ambos ficam desabilitados durante qualquer operação em andamento.
+ */
 export function BotoesAcao({ onSalvarDireto, onRedigirIA, iaLoading, salvando }: BotoesAcaoProps) {
   const disabled = iaLoading || salvando
 

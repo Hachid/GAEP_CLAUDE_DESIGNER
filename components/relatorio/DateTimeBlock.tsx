@@ -2,12 +2,18 @@
 
 import { useRef, useState } from 'react'
 
+/** Props do bloco unificado de data e horários. */
 interface DateTimeBlockProps {
   onDateChange: (date: string) => void
   onStartChange: (time: string) => void
   onEndChange: (time: string) => void
 }
 
+/**
+ * Card compacto de data e horários do turno.
+ * Calcula e exibe a duração automaticamente quando os dois horários são preenchidos.
+ * Suporta turnos que cruzam meia-noite (ex.: 22:00 → 06:00).
+ */
 export function DateTimeBlock({ onDateChange, onStartChange, onEndChange }: DateTimeBlockProps) {
   const [duracao, setDuracao] = useState<string | null>(null)
   const startRef = useRef<HTMLInputElement>(null)

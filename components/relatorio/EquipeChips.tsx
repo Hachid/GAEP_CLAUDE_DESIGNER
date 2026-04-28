@@ -1,5 +1,6 @@
 'use client'
 
+/** Operador exibido como chip selecionável. */
 interface Operador {
   id: string
   nome: string
@@ -11,6 +12,13 @@ interface EquipeChipsProps {
   onChange: (ids: string[]) => void
 }
 
+/**
+ * Seletor de membros da equipe via chips clicáveis.
+ *
+ * - Chip "TODOS": sempre com borda #1a237e; ao clicar alterna todos/nenhum.
+ * - Chips individuais: clique faz toggle individual e desativa "TODOS".
+ * - Contador ao lado do label mostra quantos estão selecionados.
+ */
 export function EquipeChips({ operadores, value, onChange }: EquipeChipsProps) {
   const todosAtivos = value.length === operadores.length && operadores.length > 0
 

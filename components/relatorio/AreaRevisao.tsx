@@ -8,6 +8,14 @@ interface AreaRevisaoProps {
   salvando: boolean
 }
 
+/**
+ * Área de revisão que aparece após o retorno da IA.
+ *
+ * - Exibe o texto revisado em textarea editável (operador pode ajustar).
+ * - Textarea de observações para informações adicionais do turno.
+ * - Botão "Salvar & Consolidar" chama `onSalvar` com o texto final e as obs.
+ * - Animação fadeIn definida no globals.css.
+ */
 export function AreaRevisao({ descricaoRevisada, onSalvar, salvando }: AreaRevisaoProps) {
   const [descricaoFinal, setDescricaoFinal] = useState(descricaoRevisada)
   const [ocorrencias, setOcorrencias] = useState('')
