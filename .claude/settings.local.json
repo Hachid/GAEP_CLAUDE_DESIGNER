@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /a \"C:\\\\Projetos\\\\Sistema_GAEP_Claude_designer\")",
+      "Read(//c/Users/User/Downloads/Sistema GAEP - Passo a passo/**)",
+      "Bash(cp *)",
+      "Bash(npx create-next-app@latest /c/Projetos/Sistema_GAEP_Claude_designer --typescript --tailwind --app --no-src-dir --import-alias \"@/*\" --eslint --use-npm)",
+      "PowerShell(Rename-Item *)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "mcp__claude_ai_SUPABASE__execute_sql",
+      "mcp__claude_ai_SUPABASE__apply_migration"
+    ]
+  }
+}

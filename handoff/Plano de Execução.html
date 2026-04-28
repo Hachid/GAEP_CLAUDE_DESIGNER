@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GAEP — Plano de Execução</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Roboto, sans-serif;
+    background: #f1f5f9;
+    color: #1e293b;
+    padding: 24px 16px 60px;
+  }
+
+  .header {
+    background: linear-gradient(135deg, #1a237e 0%, #2563eb 100%);
+    border-radius: 16px;
+    padding: 24px 28px;
+    color: #fff;
+    margin-bottom: 28px;
+    box-shadow: 0 8px 32px rgba(26,35,126,0.3);
+  }
+  .header h1 { font-size: 1.5rem; font-weight: 900; letter-spacing: 1px; }
+  .header p  { font-size: 0.85rem; opacity: 0.8; margin-top: 6px; }
+
+  /* Legend */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    margin-bottom: 24px;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 0.78rem; font-weight: 700;
+  }
+  .legend-dot {
+    width: 28px; height: 28px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem;
+  }
+
+  /* Phase block */
+  .phase {
+    margin-bottom: 10px;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+
+  .phase-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px;
+    cursor: pointer;
+    user-select: none;
+    transition: filter 0.15s;
+  }
+  .phase-header:hover { filter: brightness(0.96); }
+
+  .phase-num {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: rgba(255,255,255,0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 1rem; color: #fff; flex-shrink: 0;
+  }
+  .phase-title { flex: 1; }
+  .phase-title h2 { font-size: 1rem; font-weight: 800; color: #fff; }
+  .phase-title p  { font-size: 0.75rem; color: rgba(255,255,255,0.75); margin-top: 2px; }
+  .phase-arrow { color: rgba(255,255,255,0.7); font-size: 0.85rem; transition: transform 0.25s; }
+  .phase-arrow.open { transform: rotate(180deg); }
+
+  .phase-body {
+    background: #fff;
+    display: none;
+    border-top: 1px solid rgba(0,0,0,0.06);
+  }
+  .phase-body.open { display: block; }
+
+  /* Step */
+  .step {
+    display: flex; gap: 14px;
+    padding: 14px 18px;
+    border-bottom: 1px solid #f1f5f9;
+    align-items: flex-start;
+  }
+  .step:last-child { border-bottom: none; }
+
+  .step-icon {
+    width: 38px; height: 38px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; flex-shrink: 0; margin-top: 1px;
+  }
+
+  .step-content { flex: 1; }
+  .step-where {
+    font-size: 0.68rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.8px; margin-bottom: 3px;
+  }
+  .step-action { font-size: 0.9rem; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
+  .step-detail { font-size: 0.8rem; color: #64748b; line-height: 1.55; }
+
+  .code-block {
+    background: #0f172a;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    color: #e2e8f0;
+    margin-top: 8px;
+    line-height: 1.6;
+    overflow-x: auto;
+  }
+  .code-block .comment { color: #64748b; }
+  .code-block .cmd     { color: #86efac; }
+  .code-block .file    { color: #93c5fd; }
+  .code-block .val     { color: #fde68a; }
+
+  .tag {
+    display: inline-block;
+    font-size: 0.68rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 20px;
+    margin-right: 4px; margin-top: 4px;
+  }
+
+  /* Where colors */
+  .where-supabase { color: #059669; }
+  .where-cursor   { color: #7c3aed; }
+  .where-browser  { color: #2563eb; }
+  .where-terminal { color: #dc2626; }
+  .where-vercel   { color: #1e293b; }
+
+  .icon-supabase { background: rgba(5,150,105,0.1); }
+  .icon-cursor   { background: rgba(124,58,237,0.1); }
+  .icon-browser  { background: rgba(37,99,235,0.1); }
+  .icon-terminal { background: rgba(220,38,38,0.1); }
+  .icon-vercel   { background: rgba(30,41,59,0.08); }
+
+  /* Phase colors */
+  .c-prep    { background: #475569; }
+  .c-db      { background: #059669; }
+  .c-login   { background: #1a237e; }
+  .c-rel     { background: #2563eb; }
+  .c-bi      { background: #f97316; }
+  .c-desemp  { background: #0369a1; }
+  .c-missoes { background: #16a34a; }
+  .c-gestao  { background: #7c3aed; }
+  .c-deploy  { background: #0f172a; }
+
+  /* Progress bar */
+  .progress-wrap { margin-bottom: 28px; }
+  .progress-label {
+    display: flex; justify-content: space-between;
+    font-size: 0.78rem; font-weight: 700; color: #64748b;
+    margin-bottom: 6px;
+  }
+  .progress-bar {
+    height: 8px; background: #e2e8f0; border-radius: 99px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #1a237e, #2563eb);
+    border-radius: 99px;
+    width: 0%;
+    transition: width 0.6s ease;
+  }
+
+  .done-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 0.7rem; font-weight: 700;
+    padding: 3px 9px; border-radius: 20px;
+    background: rgba(22,163,74,0.1);
+    color: #16a34a; border: 1px solid rgba(22,163,74,0.2);
+    margin-left: 8px;
+  }
+
+  .tip {
+    background: rgba(249,115,22,0.07);
+    border-left: 4px solid #f97316;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.8rem;
+    color: #78350f;
+    margin: 10px 18px 14px;
+    line-height: 1.55;
+  }
+
+  @media (min-width: 640px) {
+    body { padding: 32px 32px 60px; max-width: 780px; margin: 0 auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🛡️ GAEP — Plano de Execução</h1>
+  <p>Passo a passo completo: do zero ao sistema em produção</p>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot icon-supabase">🗄️</div><span style="color:#059669">Supabase</span></div>
+  <div class="legend-item"><div class="legend-dot icon-cursor">🖥️</div><span style="color:#7c3aed">Cursor / Claude Code</span></div>
+  <div class="legend-item"><div class="legend-dot icon-browser">🌐</div><span style="color:#2563eb">Browser</span></div>
+  <div class="legend-item"><div class="legend-dot icon-terminal">⌨️</div><span style="color:#dc2626">Terminal</span></div>
+  <div class="legend-item"><div class="legend-dot icon-vercel">🚀</div><span style="color:#1e293b">Vercel</span></div>
+</div>
+
+<!-- Progress -->
+<div class="progress-wrap">
+  <div class="progress-label"><span>Progresso geral</span><span id="prog-pct">0%</span></div>
+  <div class="progress-bar"><div class="progress-fill" id="prog-bar"></div></div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- FASE 0 — PREPARAÇÃO -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header c-prep" onclick="toggle(this)">
+    <div class="phase-num">0</div>
+    <div class="phase-title">
+      <h2>Preparação do Ambiente</h2>
+      <p>Antes de escrever qualquer linha de código</p>
+    </div>
+    <div class="phase-arrow">▼</div>
+  </div>
+  <div class="phase-body">
+
+    <div class="step">
+      <div class="step-icon icon-browser">🌐</div>
+      <div class="step-content">
+        <div class="step-where where-browser">Browser — supabase.com</div>
+        <div class="step-action">Criar projeto no Supabase</div>
+        <div class="step-detail">Acesse supabase.com → New Project → nome "gaep" → anote a URL e a anon key</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-browser">🌐</div>
+      <div class="step-content">
+        <div class="step-where where-browser">Browser — Supabase Dashboard</div>
+        <div class="step-action">Rodar SQL de schema (001_schema.sql)</div>
+        <div class="step-detail">Dashboard → SQL Editor → cole todo o conteúdo de <code>handoff/sql/001_schema.sql</code> → Run</div>
+        <div class="code-block"><span class="comment">-- Cria: gaeps, operadores, categorias, atividades,</span>
+<span class="comment">-- relatorios, participantes, missoes, feriados, config_ia, audit_log</span></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-browser">🌐</div>
+      <div class="step-content">
+        <div class="step-where where-browser">Browser — Supabase Dashboard</div>
+        <div class="step-action">Rodar SQL de seed (002_seed.sql)</div>
+        <div class="step-detail">SQL Editor → cole <code>handoff/sql/002_seed.sql</code> → Run<br>Isso cria: GAEP-CAT, categorias, atividades, tipos de diária e config IA padrão</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-terminal">⌨️</div>
+      <div class="step-content">
+        <div class="step-where where-terminal">Terminal — pasta do projeto</div>
+        <div class="step-action">Configurar variáveis de ambiente</div>
+        <div class="step-detail">Crie/edite o arquivo <code>.env.local</code> com as chaves do Supabase</div>
+        <div class="code-block"><span class="val">NEXT_PUBLIC_SUPABASE_URL</span>=sua_url_aqui
+<span class="val">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>=sua_anon_key_aqui
+<span class="val">SUPABASE_SERVICE_ROLE_KEY</span>=sua_service_key_aqui
+<span class="val">OPENAI_API_KEY</span>=sua_openai_key_aqui</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-terminal">⌨️</div>
+      <div class="step-content">
+        <div class="step-where where-terminal">Terminal</div>
+        <div class="step-action">Copiar design tokens para o projeto</div>
+        <div class="step-detail">Cole <code>handoff/tokens/design-tokens.ts</code> em <code>lib/design-tokens.ts</code><br>Atualize o <code>tailwind.config.ts</code> com as cores do arquivo</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-terminal">⌨️</div>
+      <div class="step-content">
+        <div class="step-where where-terminal">Terminal</div>
+        <div class="step-action">Copiar logo para public/</div>
+        <div class="step-detail">Copie <code>handoff/design/GAEP-Logo.png</code> para <code>public/gaep-logo.png</code></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- ETAPA 1 — LOGIN -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header c-login" onclick="toggle(this)">
+    <div class="phase-num">1</div>
+    <div class="phase-title">
+      <h2>Tela de Login</h2>
+      <p>Autenticação por matrícula via Supabase Auth</p>
+    </div>
+    <div class="phase-arrow">▼</div>
+  </div>
+  <div class="phase-body">
+
+    <div class="tip">🎯 Referência visual: abra <strong>handoff/design/GAEP Prototype.html</strong> no browser → tela de login. Use o prompt <strong>handoff/prompts/claude-code-etapa1.md</strong></div>
+
+    <div class="step">
+      <div class="step-icon icon-cursor">🖥️</div>
+      <div class="step-content">
+        <div class="step-where where-cursor">Claude Code (Terminal Cursor)</div>
+        <div class="step-action">Cole o prompt da Etapa 1</div>
+        <div class="step-detail">Abra <code>handoff/prompts/claude-code-etapa1.md</code>, copie tudo e cole no Claude Code. Ele vai criar:</div>
+        <div class="code-block"><span class="file">app/(auth)/login/page.tsx</span>     <span class="comment">← tela de login</span>
+<span class="file">middleware.ts</span>                     <span class="comment">← proteção de rotas</span>
+<span class="file">lib/supabase/client.ts</span>            <span class="comment">← cliente Supabase</span></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-browser">🌐</div>
+      <div class="step-content">
+        <div class="step-where where-browser">Supabase Dashboard → Auth → Users</div>
+        <div class="step-action">Criar usuário de teste</div>
+        <div class="step-detail">Add user → email: <code>001@gaep.internal</code> → senha: <code>001</code><br>Isso simula o operador "Hachid" com matrícula 001</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-terminal">⌨️</div>
+      <div class="step-content">
+        <div class="step-where where-terminal">Terminal</div>
+        <div class="step-action">Testar localmente</div>
+        <div class="code-block"><span class="cmd">npm run dev</span>
+<span class="comment"># Acesse localhost:3000 → deve redirecionar para /login</span></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-cursor">🖥️</div>
+      <div class="step-content">
+        <div class="step-where where-cursor">Cursor (se precisar ajustar visual)</div>
+        <div class="step-action">Afinar o CSS com o prompt do Cursor</div>
+        <div class="step-detail">Se o visual divergir do protótipo, cole <code>handoff/prompts/cursor.md</code> no Cursor e peça a correção específica</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-terminal">⌨️</div>
+      <div class="step-content">
+        <div class="step-where where-terminal">Terminal</div>
+        <div class="step-action">Commit e avançar</div>
+        <div class="code-block"><span class="cmd">git add .</span>
+<span class="cmd">git commit -m "feat(auth): implementar tela de login com Supabase Auth"</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- ETAPA 2 — RELATÓRIO -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header c-rel" onclick="toggle(this)">
+    <div class="phase-num">2</div>
+    <div class="phase-title">
+      <h2>Registro de Operação</h2>
+      <p>Formulário + Upload de fotos + IA (GPT-4o)</p>
+    </div>
+    <div class="phase-arrow">▼</div>
+  </div>
+  <div class="phase-body">
+
+    <div class="tip">🎯 Referência: GAEP Prototype.html → menu "Relatório". Prompt: <strong>claude-code-etapa2.md</strong></div>
+
+    <div class="step">
+      <div class="step-icon icon-browser">🌐</div>
+      <div class="step-content">
+        <div class="step-where where-browser">Supabase Dashboard → Storage</div>
+        <div class="step-action">Criar bucket de fotos</div>
+        <div class="step-detail">Storage → New Bucket → nome: <code>gaep-fotos</code> → Public: false<br>Add policy: operadores autenticados podem fazer upload</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-cursor">🖥️</div>
+      <div class="step-content">
+        <div class="step-where where-cursor">Claude Code</div>
+        <div class="step-action">Cole o prompt da Etapa 2</div>
+        <div class="step-detail">Claude Code vai criar os componentes e a rota da IA:</div>
+        <div class="code-block"><span class="file">app/(app)/relatorio/page.tsx</span>
+<span class="file">components/relatorio/DateTimeBlock.tsx</span>
+<span class="file">components/relatorio/EquipeChips.tsx</span>
+<span class="file">components/relatorio/FotoUpload.tsx</span>
+<span class="file">components/relatorio/DescricaoMic.tsx</span>
+<span class="file">app/api/ia/route.ts</span>              <span class="comment">← GPT-4o</span></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-terminal">⌨️</div>
+      <div class="step-content">
+        <div class="step-where where-terminal">Terminal</div>
+        <div class="step-action">Testar: criar um relatório completo</div>
+        <div class="step-detail">Preencha todos os campos → clique "Redigir com IA" → revise → salve<br>Verifique no Supabase: tabelas <code>relatorios</code> e <code>relatorio_participantes</code></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-terminal">⌨️</div>
+      <div class="step-content">
+        <div class="step-where where-terminal">Terminal</div>
+        <div class="step-action">Commit</div>
+        <div class="code-block"><span class="cmd">git commit -m "feat(relatorio): formulário completo com IA e upload de fotos"</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- ETAPA 3 — PAINEL BI -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header c-bi" onclick="toggle(this)">
+    <div class="phase-num">3</div>
+    <div class="phase-title">
+      <h2>Painel BI</h2>
+      <p>KPIs + Donut + Rankings + Gráfico de linhas mensal</p>
+    </div>
+    <div class="phase-arrow">▼</div>
+  </div>
+  <div class="phase-body">
+
+    <div class="tip">🎯 Referência: GAEP Prototype.html → "Painel BI". Prompt: <strong>claude-code-etapa3a6.md</strong> (seção ETAPA 3)</div>
+
+    <div class="step">
+      <div class="step-icon icon-terminal">⌨️</div>
+      <div class="step-content">
+        <div class="step-where where-terminal">Terminal</div>
+        <div class="step-action">Instalar Recharts</div>
+        <div class="code-block"><span class="cmd">npm install recharts</span></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-cursor">🖥️</div>
+      <div class="step-content">
+        <div class="step-where where-cursor">Claude Code</div>
+        <div class="step-action">Cole o prompt ETAPA 3</div>
+        <div class="step-detail">Cria dashboard com dados reais do Supabase, agrupados por gaep_id e período</div>
+        <div class="code-block"><span class="file">app/(app)/dashboard/page.tsx</span>
+<span class="file">components/dashboard/DonutCategoria.tsx</span>
+<span class="file">components/dashboard/RankingBars.tsx</span>
+<span class="file">components/dashboard/EvolucaoLinhas.tsx</span></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-terminal">⌨️</div>
+      <div class="step-content">
+        <div class="step-where where-terminal">Terminal</div>
+        <div class="step-action">Commit</div>
+        <div class="code-block"><span class="cmd">git commit -m "feat(dashboard): painel BI com Recharts e dados Supabase"</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- ETAPA 4 — DESEMPENHO -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header c-desemp" onclick="toggle(this)">
+    <div class="phase-num">4</div>
+    <div class="phase-title">
+      <h2>Desempenho Individual</h2>
+      <p>Análise por operador + Folha Ponto</p>
+    </div>
+    <div class="phase-arrow">▼</div>
+  </div>
+  <div class="phase-body">
+
+    <div class="tip">🎯 Referência: GAEP Prototype.html → "Desempenho". Prompt: seção ETAPA 4</div>
+
+    <div class="step">
+      <div class="step-icon icon-cursor">🖥️</div>
+      <div class="step-content">
+        <div class="step-where where-cursor">Claude Code</div>
+        <div class="step-action">Cole o prompt ETAPA 4</div>
+        <div class="step-detail">Foco especial na FolhaPonto: datas DD/MM/AAAA, múltiplas atividades por dia, subtotal laranja por dia, total geral azul</div>
+        <div class="code-block"><span class="file">app/(app)/operadores/page.tsx</span>
+<span class="file">components/operadores/FolhaPonto.tsx</span>
+<span class="file">components/operadores/GraficosOperador.tsx</span></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-terminal">⌨️</div>
+      <div class="step-content">
+        <div class="step-where where-terminal">Terminal</div>
+        <div class="step-action">Commit</div>
+        <div class="code-block"><span class="cmd">git commit -m "feat(operadores): desempenho individual e folha ponto"</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- ETAPA 5 — MISSÕES -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header c-missoes" onclick="toggle(this)">
+    <div class="phase-num">5</div>
+    <div class="phase-title">
+      <h2>Missões (Diárias)</h2>
+      <p>Registro + Ranking expansível + Editar/Excluir</p>
+    </div>
+    <div class="phase-arrow">▼</div>
+  </div>
+  <div class="phase-body">
+
+    <div class="tip">🎯 Referência: GAEP Prototype.html → "Missões". Prompt: seção ETAPA 5</div>
+
+    <div class="step">
+      <div class="step-icon icon-cursor">🖥️</div>
+      <div class="step-content">
+        <div class="step-where where-cursor">Claude Code</div>
+        <div class="step-action">Cole o prompt ETAPA 5</div>
+        <div class="step-detail">Ponto crítico: valor usa <strong>snapshot</strong> do momento do registro — nunca retroage em missões antigas</div>
+        <div class="code-block"><span class="file">app/(app)/missoes/page.tsx</span>
+<span class="file">components/missoes/RankingAccordion.tsx</span></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-terminal">⌨️</div>
+      <div class="step-content">
+        <div class="step-where where-terminal">Terminal</div>
+        <div class="step-action">Commit</div>
+        <div class="code-block"><span class="cmd">git commit -m "feat(missoes): controle de diárias com ranking expansível"</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- ETAPA 6 — GESTÃO -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header c-gestao" onclick="toggle(this)">
+    <div class="phase-num">6</div>
+    <div class="phase-title">
+      <h2>Módulo de Gestão</h2>
+      <p>Admin + Super Admin — 6 abas completas</p>
+    </div>
+    <div class="phase-arrow">▼</div>
+  </div>
+  <div class="phase-body">
+
+    <div class="tip">🎯 Referência: GAEP Prototype.html → "Gestão" (login como Hachid para ver o Super Admin). Prompt: seção ETAPA 6</div>
+
+    <div class="step">
+      <div class="step-icon icon-cursor">🖥️</div>
+      <div class="step-content">
+        <div class="step-where where-cursor">Claude Code</div>
+        <div class="step-action">Cole o prompt ETAPA 6</div>
+        <div class="step-detail">Verificar perfil antes de renderizar cada aba. Super Admin (Hachid) vê aba extra "GAEPs"</div>
+        <div class="code-block"><span class="file">app/(app)/gestao/page.tsx</span>
+<span class="file">components/gestao/TabEfetivo.tsx</span>
+<span class="file">components/gestao/TabAtividades.tsx</span>
+<span class="file">components/gestao/TabFeriados.tsx</span>
+<span class="file">components/gestao/TabConfigIA.tsx</span>
+<span class="file">components/gestao/TabDiarias.tsx</span>
+<span class="file">components/gestao/TabGAEPs.tsx</span></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-terminal">⌨️</div>
+      <div class="step-content">
+        <div class="step-where where-terminal">Terminal</div>
+        <div class="step-action">Commit</div>
+        <div class="code-block"><span class="cmd">git commit -m "feat(gestao): módulo admin completo com 6 abas"</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- DEPLOY -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="phase">
+  <div class="phase-header c-deploy" onclick="toggle(this)">
+    <div class="phase-num">🚀</div>
+    <div class="phase-title">
+      <h2>Deploy — Vercel</h2>
+      <p>Publicar para o time acessar no celular</p>
+    </div>
+    <div class="phase-arrow">▼</div>
+  </div>
+  <div class="phase-body">
+
+    <div class="step">
+      <div class="step-icon icon-browser">🌐</div>
+      <div class="step-content">
+        <div class="step-where where-browser">Browser — vercel.com</div>
+        <div class="step-action">Importar repositório GitHub</div>
+        <div class="step-detail">vercel.com → New Project → Import Git Repository → selecione o repo GAEP</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-browser">🌐</div>
+      <div class="step-content">
+        <div class="step-where where-browser">Vercel — Settings → Environment Variables</div>
+        <div class="step-action">Adicionar variáveis de ambiente</div>
+        <div class="step-detail">Cole as mesmas chaves do <code>.env.local</code> nas env vars da Vercel</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-terminal">⌨️</div>
+      <div class="step-content">
+        <div class="step-where where-terminal">Terminal</div>
+        <div class="step-action">Push e deploy automático</div>
+        <div class="code-block"><span class="cmd">git push origin main</span>
+<span class="comment"># Vercel detecta o push e faz deploy automático</span>
+<span class="comment"># URL: gaep-cat.vercel.app (ou domínio próprio)</span></div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-icon icon-browser">🌐</div>
+      <div class="step-content">
+        <div class="step-where where-browser">Celular — abrir a URL da Vercel</div>
+        <div class="step-action">Testar no celular real</div>
+        <div class="step-detail">Teste completo: login → registrar operação → ver painel BI → gerar folha ponto<br>Adicione à tela inicial: Share → "Add to Home Screen" para ícone como app</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function toggle(header) {
+    const body = header.nextElementSibling;
+    const arrow = header.querySelector('.phase-arrow');
+    body.classList.toggle('open');
+    arrow.classList.toggle('open');
+    updateProgress();
+  }
+
+  function updateProgress() {
+    const bodies = document.querySelectorAll('.phase-body');
+    const open = [...bodies].filter(b => b.classList.contains('open')).length;
+    const pct = Math.round((open / bodies.length) * 100);
+    document.getElementById('prog-bar').style.width = pct + '%';
+    document.getElementById('prog-pct').textContent = pct + '%';
+  }
+
+  // Abrir a fase 0 por padrão
+  document.querySelector('.phase-header').click();
+</script>
+</body>
+</html>

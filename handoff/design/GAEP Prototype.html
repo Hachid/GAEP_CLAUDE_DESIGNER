@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GAEP-CAT — Sistema</title>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --primary: #1a237e;
+      --primary-hover: #121858;
+      --orange: #f97316;
+      --green: #16a34a;
+      --accent: #2563eb;
+      --bg: #f3f4f6;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --muted: #64748b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); font-family: 'Segoe UI', Roboto, Helvetica, sans-serif; }
+    body { -webkit-font-smoothing: antialiased; }
+
+    /* Wrapper — simulação de tela mobile centralizada */
+    #root { display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
+
+    .phone-shell {
+      width: 100%;
+      max-width: 430px;
+      min-height: 100vh;
+      background: var(--bg);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 0 60px rgba(0,0,0,0.12);
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      padding: 15px 16px;
+      background: var(--primary);
+      color: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+    .header h1 { font-size: 1.2rem; font-weight: 700; margin-left: 10px; letter-spacing: 0.5px; }
+    .btn-menu {
+      background: none; border: none; color: #fff;
+      font-size: 1.5rem; cursor: pointer; padding: 4px; line-height: 1;
+      display: flex; align-items: center;
+    }
+
+    /* ── Sidebar ── */
+    .backdrop {
+      position: fixed; inset: 0;
+      background: rgba(15,23,42,0.55);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      opacity: 0; visibility: hidden;
+      transition: opacity .3s, visibility .3s;
+    }
+    .backdrop.open { opacity: 1; visibility: visible; }
+
+    .sidebar {
+      position: fixed; top: 0; left: 0;
+      width: 270px; height: 100vh;
+      background: var(--surface);
+      z-index: 210;
+      transform: translateX(-100%);
+      transition: transform .3s cubic-bezier(.4,0,.2,1);
+      display: flex; flex-direction: column;
+    }
+    .sidebar.open { transform: translateX(0); }
+
+    .sidebar-head {
+      padding: 20px 18px;
+      background: var(--primary);
+      color: #fff;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .sidebar-head h2 { font-size: 1.1rem; font-weight: 700; }
+    .btn-close { background: none; border: none; color: #fff; font-size: 1.4rem; cursor: pointer; line-height: 1; }
+
+    .sidebar-user {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(26,35,126,0.04);
+    }
+    .sidebar-user .role { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; font-weight: 700; }
+    .sidebar-user .name { font-size: 1.05rem; font-weight: 700; color: var(--primary); margin-top: 2px; }
+
+    .sidebar-nav { padding: 14px 12px; display: flex; flex-direction: column; gap: 6px; flex: 1; overflow-y: auto; }
+    .nav-item {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 14px; border-radius: 10px;
+      font-weight: 600; font-size: 0.97rem; color: var(--text);
+      cursor: pointer; border: 1px solid transparent;
+      transition: all .2s; background: transparent;
+      text-align: left; width: 100%;
+    }
+    .nav-item:hover { background: var(--bg); color: var(--primary); border-color: var(--border); }
+    .nav-item.active { background: rgba(26,35,126,0.08); color: var(--primary); border-color: rgba(26,35,126,0.15); }
+    .nav-item.danger { color: #ef4444; border-color: #fecaca; }
+    .nav-item.danger:hover { background: #fef2f2; }
+
+    /* ── Screen Container ── */
+    .screen { flex: 1; overflow-y: auto; padding: 20px 16px; }
+    .screen-title {
+      text-align: center;
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: var(--primary);
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 14px;
+      margin-bottom: 22px;
+      letter-spacing: 0.3px;
+    }
+
+    /* ── Login ── */
+    .login-wrap {
+      display: flex; flex-direction: column; justify-content: center;
+      align-items: center; min-height: 100vh; padding: 30px 20px;
+      background: #f2f2f2;
+    }
+    .login-logo {
+      text-align: center; color: #1a237e; margin-bottom: 28px;
+    }
+    .login-logo img {
+      width: 120px; height: 120px; object-fit: contain;
+      margin-bottom: 14px; filter: drop-shadow(0 4px 16px rgba(0,0,0,0.18));
+    }
+    .login-logo h1 { font-size: 1.9rem; font-weight: 900; letter-spacing: 2px; color: #1a237e; }
+    .login-logo p { font-size: 0.82rem; color: #64748b; margin-top: 4px; letter-spacing: 0.5px; }
+
+    .login-card {
+      background: #fff; border-radius: 20px; padding: 28px 24px;
+      width: 100%; max-width: 360px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .login-card h2 { text-align: center; font-size: 1.1rem; color: var(--muted); margin-bottom: 24px; font-weight: 600; }
+
+    /* ── Animações ── */
+    @keyframes fadeIn {
+      from { opacity:0; transform:translateY(-8px); }
+      to { opacity:1; transform:translateY(0); }
+    }
+    @keyframes slideUp {
+      from { opacity:0; transform:translateY(20px); }
+      to { opacity:1; transform:translateY(0); }
+    }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="gaep-components.jsx"></script>
+<script type="text/babel" src="gaep-admin.jsx"></script>
+
+<script type="text/babel">
+
+
+const { useState, useEffect, useRef } = React;
+
+const NAV_ITEMS = [
+{ id: 'relatorio', icon: '📝', label: 'Relatório' },
+{ id: 'dashboard', icon: '📊', label: 'Painel BI' },
+{ id: 'operador',  icon: '👮', label: 'Desempenho' },
+{ id: 'missoes', icon: '✈️', label: 'Missões (Diárias)' },
+{ id: 'gestao', icon: '⚙️', label: 'Gestão' }];
+
+
+// ── Login ──────────────────────────────────────────────────
+function Login({ onLogin }) {
+  const [op, setOp] = useState('');
+  const [senha, setSenha] = useState('');
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  function submit(e) {
+    e.preventDefault();
+    if (!op) {setErr('Selecione um operador.');return;}
+    if (!senha) {setErr('Informe a matrícula/senha.');return;}
+    setLoading(true);setErr('');
+    setTimeout(() => {
+      if (senha === '1234' || senha === op.toLowerCase()) {
+        onLogin(op);
+      } else {
+        setErr('Matrícula incorreta. (Use o nome em minúsculas ou "1234")');
+        setLoading(false);
+      }
+    }, 900);
+  }
+
+  return (
+    <div className="login-wrap">
+      <div className="login-logo">
+        <img src="GAEP-Logo.png" alt="Logo GAEP" />
+        <h1 style={{ color: "rgb(0, 0, 0)" }}>GAEP-CAT</h1>
+        <p>Gestão Operacional</p>
+      </div>
+      <div className="login-card">
+        <h2>Autenticação</h2>
+        <form onSubmit={submit}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>Operador</label>
+            <select style={inputStyle} value={op} onChange={(e) => setOp(e.target.value)}>
+              <option value="">Selecione o Operador...</option>
+              {OPERADORES.map((o) => <option key={o}>{o}</option>)}
+            </select>
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <label style={labelStyle}>Matrícula / Senha</label>
+            <input type="password" style={inputStyle} value={senha} onChange={(e) => setSenha(e.target.value)} placeholder="Digite sua matrícula" />
+          </div>
+          {err && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginBottom: 12, textAlign: 'center', fontWeight: 600 }}>{err}</div>}
+          <button type="submit" disabled={loading}
+          style={{ ...btnStyle, background: loading ? '#6b7280' : 'var(--primary)' }}>
+            {loading ? '⏳ Verificando...' : 'Acessar Sistema'}
+          </button>
+          <p style={{ textAlign: 'center', fontSize: '0.75rem', color: '#94a3b8', marginTop: 14 }}>
+            Senha padrão: seu nome em minúsculas ou "1234"
+          </p>
+        </form>
+      </div>
+    </div>);
+
+}
+
+// ── Sidebar ────────────────────────────────────────────────
+function Sidebar({ open, onClose, current, onNav, usuario }) {
+  return (
+    <>
+      <div className={`backdrop ${open ? 'open' : ''}`} onClick={onClose} />
+      <nav className={`sidebar ${open ? 'open' : ''}`}>
+        <div className="sidebar-head">
+          <h2>GAEP Comando</h2>
+          <button className="btn-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="sidebar-user">
+          <div className="role">Operador Ativo</div>
+          <div className="name">{usuario}</div>
+        </div>
+        <div className="sidebar-nav">
+          {NAV_ITEMS.map((item) =>
+          <button key={item.id} className={`nav-item ${current === item.id ? 'active' : ''}`}
+          onClick={() => {onNav(item.id);onClose();}}>
+              <span style={{ fontSize: '1.1rem' }}>{item.icon}</span>
+              {item.label}
+            </button>
+          )}
+          <button className="nav-item danger" style={{ marginTop: 'auto' }}
+          onClick={() => {onClose();setTimeout(() => window.__gaepLogout && window.__gaepLogout(), 100);}}>
+            🚪 Sair do Sistema
+          </button>
+        </div>
+      </nav>
+    </>);
+
+}
+
+// ── App Principal ──────────────────────────────────────────
+function App() {
+  const [usuario, setUsuario] = useState(() => {
+    try {return localStorage.getItem('gaep_proto_user') || null;} catch {return null;}
+  });
+  const [tela, setTela] = useState('relatorio');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  window.__gaepLogout = () => {
+    localStorage.removeItem('gaep_proto_user');
+    setUsuario(null);
+  };
+
+  function login(nome) {
+    localStorage.setItem('gaep_proto_user', nome);
+    setUsuario(nome);
+    setTela('relatorio');
+  }
+
+  if (!usuario) return <Login onLogin={login} />;
+
+  const screenTitles = {
+    relatorio: 'REGISTRO OPERACIONAL',
+    dashboard: 'Inteligência Operacional',
+    operador: 'Desempenho Individual',
+    missoes: 'Controle de Missões',
+    gestao: 'Gestão'
+  };
+
+  function renderScreen() {
+    switch (tela) {
+      case 'relatorio':return <RegistroOperacao usuario={usuario} />;
+      case 'dashboard':return <PainelBI />;
+      case 'operador':return <DesempenhoIndividual />;
+      case 'missoes':return <Missoes />;
+      case 'gestao':return <GestaoScreen usuario={usuario} />;
+      default:return null;
+    }
+  }
+
+  return (
+    <div className="phone-shell">
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)}
+      current={tela} onNav={setTela} usuario={usuario} />
+      <header className="header" style={{ backgroundColor: "rgb(26, 35, 126)" }}>
+        <button className="btn-menu" onClick={() => setSidebarOpen(true)}>☰</button>
+        <h1>GAEP-CAT</h1>
+      </header>
+      <div className="screen" style={{ animation: 'slideUp .3s ease' }} key={tela}>
+        <div className="screen-title">{screenTitles[tela]}</div>
+        {renderScreen()}
+      </div>
+    </div>);
+
+}
+
+// GestaoScreen carregado de gaep-admin.jsx
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
