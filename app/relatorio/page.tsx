@@ -1,5 +1,30 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { RelatorioForm } from './RelatorioForm'
+
+interface OperadorRow {
+  id: string
+  nome: string
+  gaep_id: string
+  gaeps: { id: string; codigo: string } | null
+}
+
+interface OperadorSimples {
+  id: string
+  nome: string
+}
+
+interface CategoriaRow {
+  id: string
+  nome: string
+}
+
+interface AtividadeRow {
+  id: string
+  nome: string
+  categoria_id: string
+}
 
 export default async function RelatorioPage() {
   const supabase = await createClient()
@@ -7,35 +32,70 @@ export default async function RelatorioPage() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) {
-    redirect('/login')
-  }
+  if (!user) redirect('/login')
+
+  const admin = createAdminClient()
+
+  const { data: operadorAtual } = await admin
+    .from('operadores')
+    .select('id, nome, gaep_id, gaeps(id, codigo)')
+    .eq('auth_id', user.id)
+    .is('deleted_at', null)
+    .single<OperadorRow>()
+
+  if (!operadorAtual?.gaeps) redirect('/login')
+
+  const gaep = operadorAtual.gaeps
+
+  const [{ data: operadores }, { data: categorias }, { data: atividades }] = await Promise.all([
+    admin
+      .from('operadores')
+      .select('id, nome')
+      .eq('gaep_id', gaep.id)
+      .eq('ativo', true)
+      .is('deleted_at', null)
+      .returns<OperadorSimples[]>(),
+    admin.from('categorias_atividade').select('id, nome').returns<CategoriaRow[]>(),
+    admin
+      .from('atividades')
+      .select('id, nome, categoria_id')
+      .eq('ativo', true)
+      .is('deleted_at', null)
+      .returns<AtividadeRow[]>(),
+  ])
 
   return (
     <main
       style={{
         minHeight: '100vh',
-        display: 'grid',
-        placeItems: 'center',
-        padding: '24px',
-        background: '#f2f2f2',
+        background: '#f3f4f6',
+        padding: '20px 16px',
       }}
     >
-      <section
-        style={{
-          width: '100%',
-          maxWidth: '520px',
-          background: '#fff',
-          borderRadius: '16px',
-          padding: '24px',
-          boxShadow: '0 12px 40px rgba(0,0,0,0.16)',
-        }}
-      >
-        <h1 style={{ margin: 0, color: '#1a237e' }}>Acesso realizado com sucesso</h1>
-        <p style={{ marginTop: '10px', color: '#334155' }}>
-          Usuário autenticado: <strong>{user.email}</strong>
-        </p>
-      </section>
+      <div style={{ maxWidth: 430, margin: '0 auto' }}>
+        <div
+          style={{
+            textAlign: 'center',
+            fontSize: '1.35rem',
+            fontWeight: 800,
+            color: '#1a237e',
+            borderBottom: '2px solid #e2e8f0',
+            paddingBottom: 14,
+            marginBottom: 22,
+            letterSpacing: 0.3,
+          }}
+        >
+          REGISTRO OPERACIONAL
+        </div>
+        <RelatorioForm
+          operadorAtual={{ id: operadorAtual.id, nome: operadorAtual.nome }}
+          gaepId={gaep.id}
+          gaepCodigo={gaep.codigo}
+          operadores={operadores ?? []}
+          categorias={categorias ?? []}
+          atividades={atividades ?? []}
+        />
+      </div>
     </main>
   )
 }
