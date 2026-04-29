@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DateTimeBlock } from '@/components/relatorio/DateTimeBlock'
 import { EquipeChips } from '@/components/relatorio/EquipeChips'
 import { FotoUpload } from '@/components/relatorio/FotoUpload'
@@ -93,10 +93,8 @@ export function RelatorioForm({
   categorias,
   atividades,
 }: RelatorioFormProps) {
-  const hoje = new Date().toISOString().split('T')[0]
-
   // ── Estado do formulário ──────────────────────────────────────
-  const [data, setData] = useState(hoje)
+  const [data, setData] = useState('')
   const [horaInicio, setHoraInicio] = useState('')
   const [horaFim, setHoraFim] = useState('')
   const [categoriaId, setCategoriaId] = useState('')
@@ -111,6 +109,12 @@ export function RelatorioForm({
   const [salvando, setSalvando] = useState(false)
   const [descricaoRevisada, setDescricaoRevisada] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
+
+  useEffect(() => {
+    if (!data) {
+      setData(new Date().toISOString().split('T')[0])
+    }
+  }, [data])
 
   // ── Derivados ─────────────────────────────────────────────────
   const atividadesFiltradas = atividades.filter((a) => a.categoria_id === categoriaId)
@@ -251,6 +255,7 @@ export function RelatorioForm({
 
       {/* Data + Horários */}
       <DateTimeBlock
+        date={data}
         onDateChange={setData}
         onStartChange={setHoraInicio}
         onEndChange={setHoraFim}

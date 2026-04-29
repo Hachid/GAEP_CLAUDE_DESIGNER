@@ -13,7 +13,7 @@ export async function loginAction(
   const senha = formData.get('senha') as string
 
   if (!matricula || !senha) {
-    return { error: 'Selecione um operador e informe a matrícula.' }
+    return { error: 'Selecione um operador e informe a senha.' }
   }
 
   const supabase = await createClient()

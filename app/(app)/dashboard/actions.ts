@@ -51,8 +51,8 @@ async function computeKPI(gaepId: string, filtros: DashboardFiltros): Promise<KP
     )
     .eq('gaep_id', gaepId)
     .is('deleted_at', null)
-    .gte('data_atividade', filtros.dataInicio)
-    .lte('data_atividade', filtros.dataFim)
+    .gte('data', filtros.dataInicio)
+    .lte('data', filtros.dataFim)
 
   const { data } = atividadeIds
     ? await baseQuery.in('atividade_id', atividadeIds)
@@ -139,7 +139,7 @@ export async function refreshKPIData(
 }
 
 type EvoRow = {
-  data_atividade: string
+  data: string
   hora_inicio: string
   hora_fim: string
 }
@@ -150,16 +150,16 @@ export async function fetchEvolucao(gaepId: string): Promise<EvolucaoMes[]> {
 
   const { data } = await admin
     .from('relatorios')
-    .select('data_atividade, hora_inicio, hora_fim')
+    .select('data, hora_inicio, hora_fim')
     .eq('gaep_id', gaepId)
     .is('deleted_at', null)
-    .order('data_atividade')
+    .order('data')
 
   const rows = (data ?? []) as EvoRow[]
   const mesMap = new Map<string, { minutos: number; registros: number }>()
 
   for (const r of rows) {
-    const mes = r.data_atividade.slice(0, 7)
+    const mes = r.data.slice(0, 7)
     const mins = minutesBetween(r.hora_inicio, r.hora_fim)
     const existing = mesMap.get(mes)
     if (existing) {

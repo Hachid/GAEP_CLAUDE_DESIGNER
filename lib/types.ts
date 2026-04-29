@@ -90,7 +90,7 @@ export interface Relatorio {
   gaep_id: string
   atividade_id: string
   relator_id: string
-  data_atividade: string
+  data: string
   hora_inicio: string
   hora_fim: string
   descricao_bruta: string | null

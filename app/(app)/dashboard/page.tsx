@@ -1,3 +1,5 @@
+export const revalidate = 0
+
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -31,7 +33,7 @@ export default async function DashboardPage() {
 
   const { data: byAuthId } = await admin
     .from('operadores')
-    .select('id, nome_guerra, gaep_id, matricula, perfil, gaeps(id, nome)')
+    .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, nome:codigo)')
     .eq('auth_id', user.id)
     .is('deleted_at', null)
     .maybeSingle<OperadorComGaep>()
@@ -43,11 +45,14 @@ export default async function DashboardPage() {
     if (matricula) {
       const { data: byMatricula } = await admin
         .from('operadores')
-        .select('id, nome_guerra, gaep_id, matricula, perfil, gaeps(id, nome)')
+        .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, nome:codigo)')
         .eq('matricula', matricula)
         .is('deleted_at', null)
         .maybeSingle<OperadorComGaep>()
-      if (byMatricula) operadorAtual = byMatricula
+      if (byMatricula) {
+        operadorAtual = byMatricula
+        admin.from('operadores').update({ auth_id: user.id }).eq('id', byMatricula.id).then(() => {})
+      }
     }
   }
 

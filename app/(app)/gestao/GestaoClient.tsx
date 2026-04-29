@@ -14,6 +14,7 @@ import {
   editarDiaria,
   adicionarGaep,
   toggleAtivoGaep,
+  importarRelatoriosCsv,
 } from './actions'
 
 // ── Tipos públicos ────────────────────────────────────────────
@@ -1240,6 +1241,131 @@ function TabGAEPs({ initial }: { initial: GaepRow[] }) {
   )
 }
 
+// ── Tab: Importação ───────────────────────────────────────────
+
+function TabImportacaoRelatorios() {
+  const [toast, setToast] = useState('')
+  const [resultado, setResultado] = useState('')
+  const [errorLines, setErrorLines] = useState<Array<{ line: number; reason: string }>>([])
+  const [pending, startTransition] = useTransition()
+
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 4000)
+  }
+
+  function handleUpload(file: File | null) {
+    if (!file) return
+    startTransition(async () => {
+      const content = await file.text()
+      const res = await importarRelatoriosCsv(content)
+      if (res.error) {
+        showToast(`❌ ${res.error}`)
+        return
+      }
+      setErrorLines(res.errors ?? [])
+      const msg = `✅ Importação concluída. Inseridos: ${res.inserted ?? 0}, atualizados: ${res.updated ?? 0}, ignorados: ${res.skipped ?? 0}.`
+      setResultado(msg)
+      showToast(msg)
+    })
+  }
+
+  return (
+    <div>
+      <Toast msg={toast} />
+      <AdminCard>
+        <SectionHeader title="Importação de Relatórios (CSV)" />
+        <div style={{ padding: 16 }}>
+          <p style={{ fontSize: '0.85rem', color: '#334155', lineHeight: 1.6, marginTop: 0 }}>
+            Baixe o modelo, preencha com os dados do sistema anterior e envie o CSV para atualizar a base de relatórios.
+            O separador esperado é <strong>ponto e vírgula (;)</strong>.
+          </p>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+            <a
+              href="/modelos/importacao-relatorios-template.csv"
+              download
+              style={{
+                display: 'inline-block',
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: '#1a237e',
+                color: '#fff',
+                textDecoration: 'none',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+              }}
+            >
+              ⬇️ Baixar modelo CSV
+            </a>
+            <label
+              style={{
+                display: 'inline-block',
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: pending ? '#94a3b8' : '#16a34a',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+                cursor: pending ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {pending ? '⏳ Importando...' : '📤 Enviar CSV'}
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                disabled={pending}
+                style={{ display: 'none' }}
+                onChange={(e) => handleUpload(e.target.files?.[0] ?? null)}
+              />
+            </label>
+          </div>
+          <div style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.7 }}>
+            Campos obrigatórios no modelo: <code>gaep_codigo</code>, <code>relator_matricula</code>, <code>data</code>, <code>hora_inicio</code>, <code>hora_fim</code>, <code>categoria_nome</code>, <code>atividade_nome</code>, <code>descricao_revisada</code>.
+          </div>
+          {resultado && (
+            <div
+              style={{
+                marginTop: 14,
+                padding: 12,
+                borderRadius: 8,
+                background: 'rgba(22,163,74,0.08)',
+                border: '1px solid rgba(22,163,74,0.25)',
+                color: '#166534',
+                fontWeight: 700,
+                fontSize: '0.82rem',
+              }}
+            >
+              {resultado}
+            </div>
+          )}
+          {errorLines.length > 0 && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: 12,
+                borderRadius: 8,
+                background: 'rgba(239,68,68,0.08)',
+                border: '1px solid rgba(239,68,68,0.25)',
+              }}
+            >
+              <div style={{ color: '#991b1b', fontWeight: 800, fontSize: '0.8rem', marginBottom: 6 }}>
+                Linhas com erro ({errorLines.length})
+              </div>
+              <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                {errorLines.map((err, idx) => (
+                  <div key={`${err.line}-${idx}`} style={{ fontSize: '0.78rem', color: '#7f1d1d', lineHeight: 1.5 }}>
+                    Linha {err.line}: {err.reason}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </AdminCard>
+    </div>
+  )
+}
+
 // ── Componente principal ──────────────────────────────────────
 
 interface Tab {
@@ -1283,6 +1409,12 @@ export function GestaoClient({ data }: { data: GestaoData }) {
       icon: '💰',
       label: 'Diárias',
       comp: <TabDiarias initial={data.diarias} />,
+    },
+    {
+      id: 'importacao',
+      icon: '📥',
+      label: 'Importar',
+      comp: <TabImportacaoRelatorios />,
     },
     ...(isSuperAdmin
       ? [{ id: 'gaeps', icon: '🌐', label: 'GAEPs', comp: <TabGAEPs initial={data.gaeps} /> }]

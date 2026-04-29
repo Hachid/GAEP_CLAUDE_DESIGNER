@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 
 /** Props do bloco unificado de data e horários. */
 interface DateTimeBlockProps {
+  date: string
   onDateChange: (date: string) => void
   onStartChange: (time: string) => void
   onEndChange: (time: string) => void
@@ -14,7 +15,7 @@ interface DateTimeBlockProps {
  * Calcula e exibe a duração automaticamente quando os dois horários são preenchidos.
  * Suporta turnos que cruzam meia-noite (ex.: 22:00 → 06:00).
  */
-export function DateTimeBlock({ onDateChange, onStartChange, onEndChange }: DateTimeBlockProps) {
+export function DateTimeBlock({ date, onDateChange, onStartChange, onEndChange }: DateTimeBlockProps) {
   const [duracao, setDuracao] = useState<string | null>(null)
   const startRef = useRef<HTMLInputElement>(null)
   const endRef = useRef<HTMLInputElement>(null)
@@ -35,8 +36,6 @@ export function DateTimeBlock({ onDateChange, onStartChange, onEndChange }: Date
     setDuracao(m > 0 ? `${h}h ${m}min` : `${h}h`)
   }
 
-  const today = new Date().toISOString().split('T')[0]
-
   return (
     <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, overflow: 'hidden', marginBottom: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
       {/* Linha 1: Data */}
@@ -48,7 +47,7 @@ export function DateTimeBlock({ onDateChange, onStartChange, onEndChange }: Date
           </div>
           <input
             type="date"
-            defaultValue={today}
+            value={date}
             onChange={(e) => onDateChange(e.target.value)}
             style={{ border: 'none', background: 'transparent', fontSize: '1rem', fontWeight: 700, color: '#1e293b', width: '100%', outline: 'none', padding: 0 }}
           />

@@ -3,12 +3,33 @@ import { LoginForm } from './LoginForm'
 
 export default async function LoginPage() {
   const supabase = createAdminClient()
-  const { data: operadoresData } = await supabase
+  let operadoresData: Array<{ id: string; matricula: string; nome_guerra?: string; nome?: string }> = []
+
+  const byNomeGuerra = await supabase
     .from('operadores')
-    .select('id, nome, matricula')
+    .select('id, nome_guerra, matricula')
     .is('deleted_at', null)
     .eq('ativo', true)
-    .order('nome')
+    .order('nome_guerra')
+
+  if (byNomeGuerra.error && byNomeGuerra.error.message.includes('nome_guerra')) {
+    const byNome = await supabase
+      .from('operadores')
+      .select('id, nome, matricula')
+      .is('deleted_at', null)
+      .eq('ativo', true)
+      .order('nome')
+
+    if (byNome.error) {
+      console.error('[LoginPage] Erro ao buscar operadores por nome:', byNome.error.message)
+    } else {
+      operadoresData = byNome.data ?? []
+    }
+  } else if (byNomeGuerra.error) {
+    console.error('[LoginPage] Erro ao buscar operadores por nome_guerra:', byNomeGuerra.error.message)
+  } else {
+    operadoresData = byNomeGuerra.data ?? []
+  }
 
   // Lista apenas operadores já cadastrados no domínio da aplicação.
   // Isso evita autenticar usuários do Auth sem vínculo em `operadores`,
@@ -19,7 +40,7 @@ export default async function LoginPage() {
       if (!matricula) return null
       return {
         id: String(op.id),
-        nome: String(op.nome ?? matricula),
+        nome: String(op.nome_guerra ?? op.nome ?? matricula),
         matricula,
       }
     })

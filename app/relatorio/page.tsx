@@ -11,7 +11,7 @@ interface OperadorComGaep {
   gaep_id: string
   matricula: string
   perfil: string
-  gaeps: { id: string; codigo: string } | null
+  gaeps: { id: string; nome: string } | null
 }
 
 interface OperadorSimples {
@@ -59,7 +59,7 @@ export default async function RelatorioPage() {
     // Tentativa 1: pelo auth_id (rápido — O(1) pelo índice)
     const { data: byAuthId } = await admin
       .from('operadores')
-      .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, codigo)')
+      .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, nome:codigo)')
       .eq('auth_id', user.id)
       .is('deleted_at', null)
       .maybeSingle<OperadorComGaep>()
@@ -73,7 +73,7 @@ export default async function RelatorioPage() {
       if (matricula) {
         const { data: byMatricula } = await admin
           .from('operadores')
-          .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, codigo)')
+          .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, nome:codigo)')
           .eq('matricula', matricula)
           .is('deleted_at', null)
           .maybeSingle<OperadorComGaep>()
@@ -198,7 +198,6 @@ export default async function RelatorioPage() {
       admin
         .from('atividades')
         .select('id, nome, categoria_id')
-        .eq('ativo', true)
         .is('deleted_at', null)
         .order('nome'),
     ])
@@ -218,7 +217,7 @@ export default async function RelatorioPage() {
     <>
       <SidebarNav
         nome={operadorAtual.nome_guerra}
-        gaepCodigo={gaep.codigo}
+        gaepCodigo={gaep.nome}
         perfil={operadorAtual.perfil ?? 'OPERADOR'}
       />
       <main
@@ -246,7 +245,7 @@ export default async function RelatorioPage() {
           <RelatorioForm
             operadorAtual={{ id: operadorAtual.id, nome: operadorAtual.nome_guerra }}
             gaepId={gaep.id}
-            gaepCodigo={gaep.codigo}
+            gaepCodigo={gaep.nome}
             operadores={operadores}
             categorias={categorias}
             atividades={atividades}

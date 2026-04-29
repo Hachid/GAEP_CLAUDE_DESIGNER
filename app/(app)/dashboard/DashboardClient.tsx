@@ -1,24 +1,25 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { FiltrosDash } from '@/components/dashboard/FiltrosDash'
 import { KPIGrid } from '@/components/dashboard/KPIGrid'
 import { refreshKPIData } from './actions'
 import type { KPIData, DashboardFiltros, EvolucaoMes } from './types'
 
-// Recharts usa APIs de browser — carrega apenas no cliente para evitar erro de hidratação
+// Recharts usa APIs de browser — ssr:false sem loading evita mismatch de hidratação
 const DonutCategoria = dynamic(
   () => import('@/components/dashboard/DonutCategoria').then((m) => m.DonutCategoria),
-  { ssr: false, loading: () => <div style={{ height: 240 }} /> }
+  { ssr: false }
 )
 const RankingBars = dynamic(
   () => import('@/components/dashboard/RankingBars').then((m) => m.RankingBars),
-  { ssr: false, loading: () => <div style={{ minHeight: 160 }} /> }
+  { ssr: false }
 )
 const EvolucaoLinhas = dynamic(
   () => import('@/components/dashboard/EvolucaoLinhas').then((m) => m.EvolucaoLinhas),
-  { ssr: false, loading: () => <div style={{ height: 320 }} /> }
+  { ssr: false }
 )
 
 type Props = {
@@ -55,10 +56,17 @@ export function DashboardClient({
   categorias,
   atividades,
 }: Props) {
+  const router = useRouter()
   const [kpi, setKpi] = useState<KPIData>(kpiInicial)
   const [filtros, setFiltros] = useState<DashboardFiltros>(filtrosIniciais)
   const [erroFiltro, setErroFiltro] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  // Atualiza dados do servidor a cada 30 segundos
+  useEffect(() => {
+    const id = setInterval(() => router.refresh(), 30_000)
+    return () => clearInterval(id)
+  }, [router])
 
   function handleAtualizar(novosFiltros: DashboardFiltros) {
     setFiltros(novosFiltros)

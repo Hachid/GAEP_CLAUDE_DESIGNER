@@ -133,13 +133,13 @@ export function LoginForm({ operadores }: LoginFormProps) {
                 marginBottom: '6px',
               }}
             >
-              Matrícula / Senha
+              Senha
             </label>
             <input
               id="senha-input"
               name="senha"
               type="password"
-              placeholder="Digite sua matrícula"
+              placeholder="Digite sua senha"
               required
               style={{
                 width: '100%',
