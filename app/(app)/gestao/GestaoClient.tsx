@@ -11,6 +11,7 @@ import {
   adicionarFeriado,
   removerFeriado,
   salvarConfigIA,
+  salvarConfigRelatorio,
   testarPromptIA,
   editarDiaria,
   adicionarGaep,
@@ -49,6 +50,26 @@ export interface ConfigIAData {
   prompt: string
 }
 
+export type AlinhamentoRelatorio = 'left' | 'center' | 'right' | 'justify'
+
+export interface EstiloBlocoRelatorio {
+  fontFamily: string
+  fontColor: string
+  align: AlinhamentoRelatorio
+  indent: number
+  lineHeight: number
+}
+
+export interface ConfigRelatorioUIData {
+  id: string | null
+  tituloTexto: string
+  descricaoTexto: string
+  rodapeTexto: string
+  tituloEstilo: EstiloBlocoRelatorio
+  descricaoEstilo: EstiloBlocoRelatorio
+  rodapeEstilo: EstiloBlocoRelatorio
+}
+
 export interface DiariaRow {
   id: string
   tipo: string
@@ -73,6 +94,7 @@ export interface GestaoData {
   atividades: AtividadeRow[]
   feriados: FeriadoRow[]
   configIA: ConfigIAData
+  configRelatorio: ConfigRelatorioUIData
   diarias: DiariaRow[]
   gaeps: GaepRow[]
 }
@@ -967,6 +989,216 @@ function TabIA({
   )
 }
 
+const FONT_OPTIONS = ['Times New Roman', 'Arial', 'Calibri', 'Georgia', 'Courier New'] as const
+const ALIGN_OPTIONS: Array<{ value: AlinhamentoRelatorio; label: string }> = [
+  { value: 'left', label: 'Esquerda' },
+  { value: 'center', label: 'Centralizado' },
+  { value: 'right', label: 'Direita' },
+  { value: 'justify', label: 'Justificado' },
+]
+
+function StyleEditor({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: EstiloBlocoRelatorio
+  onChange: (next: EstiloBlocoRelatorio) => void
+}) {
+  return (
+    <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 12, marginBottom: 12, background: '#f8fafc' }}>
+      <div style={{ fontSize: '0.75rem', color: '#334155', fontWeight: 800, marginBottom: 10 }}>{label}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <FormField label="Fonte">
+          <select
+            value={value.fontFamily}
+            onChange={(e) => onChange({ ...value, fontFamily: e.target.value })}
+            style={mInput}
+          >
+            {FONT_OPTIONS.map((font) => (
+              <option key={font} value={font}>
+                {font}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label="Cor da Fonte">
+          <input
+            type="color"
+            value={value.fontColor}
+            onChange={(e) => onChange({ ...value, fontColor: e.target.value })}
+            style={{ ...mInput, height: 40, padding: 4 }}
+          />
+        </FormField>
+        <FormField label="Alinhamento">
+          <select
+            value={value.align}
+            onChange={(e) => onChange({ ...value, align: e.target.value as AlinhamentoRelatorio })}
+            style={mInput}
+          >
+            {ALIGN_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label="Recuo (px)">
+          <input
+            type="number"
+            value={value.indent}
+            min={0}
+            max={80}
+            onChange={(e) => onChange({ ...value, indent: Number(e.target.value || 0) })}
+            style={mInput}
+          />
+        </FormField>
+      </div>
+      <FormField label="Espaçamento entre linhas">
+        <input
+          type="number"
+          value={value.lineHeight}
+          min={1}
+          max={3}
+          step={0.1}
+          onChange={(e) => onChange({ ...value, lineHeight: Number(e.target.value || 1) })}
+          style={mInput}
+        />
+      </FormField>
+    </div>
+  )
+}
+
+function TabRelatorio({
+  gaepId,
+  operadorId,
+  initial,
+}: {
+  gaepId: string
+  operadorId: string
+  initial: ConfigRelatorioUIData
+}) {
+  const [cfg, setCfg] = useState<ConfigRelatorioUIData>(initial)
+  const [subTab, setSubTab] = useState<'titulo' | 'descricao' | 'rodape'>('titulo')
+  const [toast, setToast] = useState('')
+  const [pending, startTransition] = useTransition()
+
+  function showToast(msg: string) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }
+
+  function salvar() {
+    startTransition(async () => {
+      const res = await salvarConfigRelatorio(gaepId, operadorId, cfg)
+      if (res.error) {
+        showToast(`❌ ${res.error}`)
+        return
+      }
+      showToast('✅ Configuração do relatório salva!')
+    })
+  }
+
+  return (
+    <div>
+      <Toast msg={toast} />
+      <AdminCard>
+        <SectionHeader title="Configuração de Relatório (PDF)" />
+        <div style={{ padding: 16 }}>
+          <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.6, marginBottom: 12 }}>
+            O PDF usa o timbrado <code>gaep-cat-header.png</code> como fundo. Ajuste abaixo o estilo de título, descrição e rodapé.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+            <ActionBtn onClick={() => setSubTab('titulo')} color={subTab === 'titulo' ? '#1a237e' : '#64748b'}>
+              Título
+            </ActionBtn>
+            <ActionBtn onClick={() => setSubTab('descricao')} color={subTab === 'descricao' ? '#1a237e' : '#64748b'}>
+              Descrição
+            </ActionBtn>
+            <ActionBtn onClick={() => setSubTab('rodape')} color={subTab === 'rodape' ? '#1a237e' : '#64748b'}>
+              Rodapé
+            </ActionBtn>
+          </div>
+
+          {subTab === 'titulo' && (
+            <>
+              <FormField label="Título do Relatório">
+                <input
+                  value={cfg.tituloTexto}
+                  onChange={(e) => setCfg((prev) => ({ ...prev, tituloTexto: e.target.value }))}
+                  style={mInput}
+                  placeholder="RELATÓRIO OPERACIONAL"
+                />
+              </FormField>
+              <StyleEditor
+                label="Estilo do Título"
+                value={cfg.tituloEstilo}
+                onChange={(next) => setCfg((prev) => ({ ...prev, tituloEstilo: next }))}
+              />
+            </>
+          )}
+
+          {subTab === 'descricao' && (
+            <>
+              <FormField label="Descrição Complementar (opcional)">
+                <textarea
+                  rows={3}
+                  value={cfg.descricaoTexto}
+                  onChange={(e) => setCfg((prev) => ({ ...prev, descricaoTexto: e.target.value }))}
+                  style={{ ...mInput, resize: 'vertical' }}
+                  placeholder="Texto fixo opcional para aparecer antes da descrição do relatório."
+                />
+              </FormField>
+              <StyleEditor
+                label="Estilo da Descrição"
+                value={cfg.descricaoEstilo}
+                onChange={(next) => setCfg((prev) => ({ ...prev, descricaoEstilo: next }))}
+              />
+            </>
+          )}
+
+          {subTab === 'rodape' && (
+            <>
+              <FormField label="Texto do Rodapé">
+                <input
+                  value={cfg.rodapeTexto}
+                  onChange={(e) => setCfg((prev) => ({ ...prev, rodapeTexto: e.target.value }))}
+                  style={mInput}
+                  placeholder="{{GAEP}} · v{{VERSAO}}"
+                />
+              </FormField>
+              <StyleEditor
+                label="Estilo do Rodapé"
+                value={cfg.rodapeEstilo}
+                onChange={(next) => setCfg((prev) => ({ ...prev, rodapeEstilo: next }))}
+              />
+            </>
+          )}
+
+          <button
+            onClick={salvar}
+            disabled={pending}
+            style={{
+              width: '100%',
+              padding: 12,
+              background: pending ? '#94a3b8' : '#16a34a',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 10,
+              fontWeight: 700,
+              fontSize: '0.85rem',
+              cursor: pending ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {pending ? '⏳ Salvando...' : '💾 Salvar formatação do relatório'}
+          </button>
+        </div>
+      </AdminCard>
+    </div>
+  )
+}
+
 // ── Tab: Diárias ──────────────────────────────────────────────
 
 function TabDiarias({ initial }: { initial: DiariaRow[] }) {
@@ -1467,6 +1699,17 @@ export function GestaoClient({ data }: { data: GestaoData }) {
       comp: <TabIA gaepId={data.gaep.id} operadorId={data.operadorAtual.id} initial={data.configIA} />,
     },
     {
+      id: 'relatorio',
+      label: 'Relatório',
+      comp: (
+        <TabRelatorio
+          gaepId={data.gaep.id}
+          operadorId={data.operadorAtual.id}
+          initial={data.configRelatorio}
+        />
+      ),
+    },
+    {
       id: 'diarias',
       label: 'Diárias',
       comp: <TabDiarias initial={data.diarias} />,
@@ -1481,7 +1724,7 @@ export function GestaoClient({ data }: { data: GestaoData }) {
       : []),
   ]
 
-  const tabParam = searchParams.get('tab') ?? 'efetivo'
+  const tabParam = searchParams?.get('tab') ?? 'efetivo'
   const current = useMemo(() => tabs.find((t) => t.id === tabParam) ?? tabs[0], [tabParam, tabs])
 
   return (

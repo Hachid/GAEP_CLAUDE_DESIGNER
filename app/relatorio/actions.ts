@@ -145,3 +145,331 @@ export async function salvarRelatorio(
   revalidatePath('/relatorio')
   return { id: relatorioId }
 }
+
+// ── Tipos para visualização e histórico ──────────────────────
+
+export interface RelatorioDetalhado {
+  id: string
+  data: string
+  hora_inicio: string
+  hora_fim: string
+  horas_totais: number | null
+  descricao_bruta: string | null
+  descricao_revisada: string
+  ocorrencias: string | null
+  fotos_urls: string[] | null
+  outros_integrantes: string | null
+  versao: number
+  created_at: string
+  updated_at: string
+  categoria_nome: string | null
+  atividade_nome: string | null
+  relatorista_nome: string | null
+  participantes: Array<{ id: string; nome: string }>
+  versoes: Array<{
+    id: string
+    versao: number
+    descricao_anterior: string | null
+    descricao_nova: string | null
+    motivo: string | null
+    editado_por_nome: string | null
+    created_at: string
+  }>
+}
+
+export interface RelatorioResumo {
+  id: string
+  data: string
+  hora_inicio: string
+  hora_fim: string
+  horas_totais: number | null
+  categoria_id: string | null
+  atividade_id: string | null
+  categoria_nome: string | null
+  atividade_nome: string | null
+  versao: number
+  created_at: string
+}
+
+/** Busca os detalhes completos de um relatório pelo ID. */
+export async function buscarRelatorio(
+  id: string
+): Promise<{ data?: RelatorioDetalhado; error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) return { error: 'Sessão expirada.' }
+
+  const admin = createAdminClient()
+
+  const { data: rel, error: relErr } = await admin
+    .from('relatorios')
+    .select('*')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .single()
+
+  if (relErr || !rel) return { error: 'Relatório não encontrado.' }
+
+  const relRow = rel as Record<string, unknown>
+
+  // Busca categoria, atividade e relatorista em paralelo
+  const [catRes, atvRes, relRes, partRes, verRes] = await Promise.all([
+    relRow.categoria_id
+      ? admin.from('categorias_atividade').select('nome').eq('id', relRow.categoria_id).single()
+      : Promise.resolve({ data: null }),
+    relRow.atividade_id
+      ? admin.from('atividades').select('nome').eq('id', relRow.atividade_id).single()
+      : Promise.resolve({ data: null }),
+    relRow.relatorista_id
+      ? admin.from('operadores').select('nome').eq('id', relRow.relatorista_id).single()
+      : Promise.resolve({ data: null }),
+    admin.from('relatorio_participantes').select('operador_id').eq('relatorio_id', id),
+    admin
+      .from('relatorio_versoes')
+      .select('id, versao, descricao_anterior, descricao_nova, motivo, editado_por_id, created_at')
+      .eq('relatorio_id', id)
+      .order('versao', { ascending: false }),
+  ])
+
+  // Busca nomes dos participantes
+  const participanteIds = ((partRes.data ?? []) as Array<{ operador_id: string }>).map(
+    (p) => p.operador_id
+  )
+  let participantes: Array<{ id: string; nome: string }> = []
+  if (participanteIds.length > 0) {
+    const { data: ops } = await admin
+      .from('operadores')
+      .select('id, nome')
+      .in('id', participanteIds)
+    participantes = ((ops ?? []) as Array<{ id: string; nome: string }>).map((o) => ({
+      id: o.id,
+      nome: o.nome,
+    }))
+  }
+
+  // Busca nomes dos editores das versões
+  const versoesBruto = ((verRes.data ?? []) as Array<Record<string, unknown>>)
+  const editorIds = [...new Set(versoesBruto.map((v) => v.editado_por_id as string).filter(Boolean))]
+  let editorMap: Record<string, string> = {}
+  if (editorIds.length > 0) {
+    const { data: eds } = await admin.from('operadores').select('id, nome').in('id', editorIds)
+    editorMap = Object.fromEntries(
+      ((eds ?? []) as Array<{ id: string; nome: string }>).map((e) => [e.id, e.nome])
+    )
+  }
+
+  const versoes = versoesBruto.map((v) => ({
+    id: v.id as string,
+    versao: v.versao as number,
+    descricao_anterior: (v.descricao_anterior as string) ?? null,
+    descricao_nova: (v.descricao_nova as string) ?? null,
+    motivo: (v.motivo as string) ?? null,
+    editado_por_nome: v.editado_por_id ? (editorMap[v.editado_por_id as string] ?? null) : null,
+    created_at: v.created_at as string,
+  }))
+
+  const catData = catRes.data as { nome: string } | null
+  const atvData = atvRes.data as { nome: string } | null
+  const relData = relRes.data as { nome: string } | null
+
+  return {
+    data: {
+      id: relRow.id as string,
+      data: relRow.data as string,
+      hora_inicio: relRow.hora_inicio as string,
+      hora_fim: relRow.hora_fim as string,
+      horas_totais: (relRow.horas_totais as number) ?? null,
+      descricao_bruta: (relRow.descricao_bruta as string) ?? null,
+      descricao_revisada: relRow.descricao_revisada as string,
+      ocorrencias: (relRow.ocorrencias as string) ?? null,
+      fotos_urls: (relRow.fotos_urls as string[]) ?? null,
+      outros_integrantes: (relRow.outros_integrantes as string) ?? null,
+      versao: relRow.versao as number,
+      created_at: relRow.created_at as string,
+      updated_at: relRow.updated_at as string,
+      categoria_nome: catData?.nome ?? null,
+      atividade_nome: atvData?.nome ?? null,
+      relatorista_nome: relData?.nome ?? null,
+      participantes,
+      versoes,
+    },
+  }
+}
+
+/** Busca o histórico de relatórios do GAEP (sem deleted). */
+export async function buscarHistoricoRelatorios(
+  gaepId: string
+): Promise<{ data?: RelatorioResumo[]; error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) return { error: 'Sessão expirada.' }
+
+  const admin = createAdminClient()
+
+  const { data: rows, error: rowsErr } = await admin
+    .from('relatorios')
+    .select('id, data, hora_inicio, hora_fim, horas_totais, categoria_id, atividade_id, versao, created_at')
+    .eq('gaep_id', gaepId)
+    .is('deleted_at', null)
+    .order('data', { ascending: false })
+    .order('created_at', { ascending: false })
+
+  if (rowsErr) return { error: rowsErr.message }
+
+  const relRows = ((rows ?? []) as Array<Record<string, unknown>>)
+
+  // Busca todos os nomes de categoria e atividade em batch
+  const catIds = [...new Set(relRows.map((r) => r.categoria_id as string).filter(Boolean))]
+  const atvIds = [...new Set(relRows.map((r) => r.atividade_id as string).filter(Boolean))]
+
+  const [catsRes, atvsRes] = await Promise.all([
+    catIds.length > 0
+      ? admin.from('categorias_atividade').select('id, nome').in('id', catIds)
+      : Promise.resolve({ data: [] }),
+    atvIds.length > 0
+      ? admin.from('atividades').select('id, nome').in('id', atvIds)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  const catMap = Object.fromEntries(
+    ((catsRes.data ?? []) as Array<{ id: string; nome: string }>).map((c) => [c.id, c.nome])
+  )
+  const atvMap = Object.fromEntries(
+    ((atvsRes.data ?? []) as Array<{ id: string; nome: string }>).map((a) => [a.id, a.nome])
+  )
+
+  const data: RelatorioResumo[] = relRows.map((r) => ({
+    id: r.id as string,
+    data: r.data as string,
+    hora_inicio: r.hora_inicio as string,
+    hora_fim: r.hora_fim as string,
+    horas_totais: (r.horas_totais as number) ?? null,
+    categoria_id: (r.categoria_id as string) ?? null,
+    atividade_id: (r.atividade_id as string) ?? null,
+    categoria_nome: r.categoria_id ? (catMap[r.categoria_id as string] ?? null) : null,
+    atividade_nome: r.atividade_id ? (atvMap[r.atividade_id as string] ?? null) : null,
+    versao: r.versao as number,
+    created_at: r.created_at as string,
+  }))
+
+  return { data }
+}
+
+export interface EditarRelatorioInput {
+  id: string
+  descricaoRevisada: string
+  motivo: string
+  operadorId: string
+}
+
+/** Edita a descrição de um relatório, criando registro de versão. Admin/SuperAdmin apenas. */
+export async function editarRelatorio(
+  input: EditarRelatorioInput
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) return { error: 'Sessão expirada.' }
+  if (!input.descricaoRevisada.trim()) return { error: 'A descrição não pode estar vazia.' }
+
+  const admin = createAdminClient()
+
+  // Verifica perfil do operador
+  const { data: op } = await admin
+    .from('operadores')
+    .select('perfil')
+    .eq('id', input.operadorId)
+    .single()
+
+  const perfilOp = (op as { perfil: string } | null)?.perfil ?? ''
+  if (!['ADMIN', 'SUPER_ADMIN'].includes(perfilOp)) {
+    return { error: 'Apenas administradores podem editar relatórios.' }
+  }
+
+  // Busca descrição atual para versionar
+  const { data: atual, error: atualErr } = await admin
+    .from('relatorios')
+    .select('descricao_revisada, versao')
+    .eq('id', input.id)
+    .is('deleted_at', null)
+    .single()
+
+  if (atualErr || !atual) return { error: 'Relatório não encontrado.' }
+
+  const atualRow = atual as { descricao_revisada: string; versao: number }
+  const novaVersao = atualRow.versao + 1
+
+  // Insere versão anterior
+  await admin.from('relatorio_versoes').insert({
+    relatorio_id: input.id,
+    editado_por_id: input.operadorId,
+    versao: atualRow.versao,
+    descricao_anterior: atualRow.descricao_revisada,
+    descricao_nova: input.descricaoRevisada.trim(),
+    motivo: input.motivo.trim() || null,
+  })
+
+  // Atualiza relatório
+  const { error: updErr } = await admin
+    .from('relatorios')
+    .update({
+      descricao_revisada: input.descricaoRevisada.trim(),
+      versao: novaVersao,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.id)
+
+  if (updErr) return { error: updErr.message }
+
+  revalidatePath(`/relatorio/${input.id}`)
+  revalidatePath('/relatorio/historico')
+  return {}
+}
+
+/** Realiza soft delete de um relatório. Admin/SuperAdmin apenas. */
+export async function excluirRelatorio(input: {
+  id: string
+  operadorId: string
+}): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) return { error: 'Sessão expirada.' }
+
+  const admin = createAdminClient()
+
+  const { data: op } = await admin
+    .from('operadores')
+    .select('perfil')
+    .eq('id', input.operadorId)
+    .single()
+
+  const perfilOp = (op as { perfil: string } | null)?.perfil ?? ''
+  if (!['ADMIN', 'SUPER_ADMIN'].includes(perfilOp)) {
+    return { error: 'Apenas administradores podem excluir relatórios.' }
+  }
+
+  const { error: delErr } = await admin
+    .from('relatorios')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', input.id)
+
+  if (delErr) return { error: delErr.message }
+
+  revalidatePath('/relatorio/historico')
+  return {}
+}

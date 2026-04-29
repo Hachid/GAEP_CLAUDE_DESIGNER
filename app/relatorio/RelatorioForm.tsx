@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { DateTimeBlock } from '@/components/relatorio/DateTimeBlock'
 import { EquipeChips } from '@/components/relatorio/EquipeChips'
 import { FotoUpload } from '@/components/relatorio/FotoUpload'
@@ -109,6 +110,7 @@ export function RelatorioForm({
   const [salvando, setSalvando] = useState(false)
   const [descricaoRevisada, setDescricaoRevisada] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const [relatorioSalvoId, setRelatorioSalvoId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!data) {
@@ -147,11 +149,12 @@ export function RelatorioForm({
         fotosUrls,
         equipe,
       })
-      setFeedback(
-        result.error
-          ? { tipo: 'err', msg: result.error }
-          : { tipo: 'ok', msg: '✅ Operação registrada com sucesso!' }
-      )
+      if (result.error) {
+        setFeedback({ tipo: 'err', msg: result.error })
+      } else {
+        setFeedback({ tipo: 'ok', msg: '✅ Operação registrada com sucesso!' })
+        if (result.id) setRelatorioSalvoId(result.id)
+      }
     } catch (err) {
       console.error('[RelatorioForm] Erro inesperado ao salvar direto:', err)
       setFeedback({ tipo: 'err', msg: 'Erro inesperado. Tente novamente.' })
@@ -232,6 +235,7 @@ export function RelatorioForm({
       } else {
         setFeedback({ tipo: 'ok', msg: '✅ Turno consolidado com sucesso!' })
         setDescricaoRevisada(null)
+        if (result.id) setRelatorioSalvoId(result.id)
       }
     } catch (err) {
       console.error('[RelatorioForm] Erro inesperado ao consolidar turno:', err)
@@ -353,6 +357,29 @@ export function RelatorioForm({
           }}
         >
           {feedback.msg}
+        </div>
+      )}
+
+      {/* Botão pós-salvamento — apenas "Ver Relatório" */}
+      {relatorioSalvoId && (
+        <div style={{ marginBottom: 16, animation: 'fadeIn .3s' }}>
+          <Link
+            href={`/relatorio/${relatorioSalvoId}`}
+            style={{
+              display: 'block',
+              textAlign: 'center',
+              padding: '14px 0',
+              background: '#1a237e',
+              color: '#fff',
+              borderRadius: 10,
+              fontWeight: 700,
+              fontSize: '0.95rem',
+              textDecoration: 'none',
+              letterSpacing: 0.5,
+            }}
+          >
+            Ver Relatório Salvo
+          </Link>
         </div>
       )}
 

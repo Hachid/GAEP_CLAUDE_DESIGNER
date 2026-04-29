@@ -6,6 +6,25 @@ import { revalidatePath } from 'next/cache'
 
 type ActionResult = { error?: string }
 type CsvRow = Record<string, string>
+type Alinhamento = 'left' | 'center' | 'right' | 'justify'
+
+export interface BlocoEstiloRelatorio {
+  fontFamily: string
+  fontColor: string
+  align: Alinhamento
+  indent: number
+  lineHeight: number
+}
+
+export interface ConfigRelatorioData {
+  id: string | null
+  tituloTexto: string
+  descricaoTexto: string
+  rodapeTexto: string
+  tituloEstilo: BlocoEstiloRelatorio
+  descricaoEstilo: BlocoEstiloRelatorio
+  rodapeEstilo: BlocoEstiloRelatorio
+}
 
 interface OperadorCtx {
   admin: ReturnType<typeof createAdminClient>
@@ -196,6 +215,36 @@ export async function salvarConfigIA(
     )
     if (error) return { error: error.message }
     revalidatePath('/gestao')
+    return {}
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+export async function salvarConfigRelatorio(
+  gaepId: string,
+  operadorId: string,
+  config: ConfigRelatorioData
+): Promise<ActionResult> {
+  try {
+    const { admin } = await getAdminCtx()
+    const { error } = await admin.from('config_relatorio').upsert(
+      {
+        gaep_id: gaepId,
+        titulo_texto: config.tituloTexto.trim(),
+        descricao_texto: config.descricaoTexto.trim(),
+        rodape_texto: config.rodapeTexto.trim(),
+        titulo_estilo: config.tituloEstilo,
+        descricao_estilo: config.descricaoEstilo,
+        rodape_estilo: config.rodapeEstilo,
+        updated_by: operadorId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'gaep_id' }
+    )
+    if (error) return { error: error.message }
+    revalidatePath('/gestao')
+    revalidatePath('/relatorio')
     return {}
   } catch (e) {
     return { error: (e as Error).message }

@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { RelatorioForm } from './RelatorioForm'
@@ -236,12 +237,36 @@ export default async function RelatorioPage() {
               color: '#1a237e',
               borderBottom: '2px solid #e2e8f0',
               paddingBottom: 14,
-              marginBottom: 22,
+              marginBottom: 16,
               letterSpacing: 0.3,
             }}
           >
             REGISTRO OPERACIONAL
           </div>
+
+          {/* Acesso rápido ao histórico — sempre visível no topo */}
+          <Link
+            href="/relatorio/historico"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              background: '#fff',
+              border: '1.5px solid #e2e8f0',
+              borderRadius: 12,
+              color: '#1a237e',
+              textDecoration: 'none',
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              marginBottom: 20,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+            }}
+          >
+            <span>📋 Histórico de Relatórios</span>
+            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>→</span>
+          </Link>
+
           <RelatorioForm
             operadorAtual={{ id: operadorAtual.id, nome: operadorAtual.nome_guerra }}
             gaepId={gaep.id}

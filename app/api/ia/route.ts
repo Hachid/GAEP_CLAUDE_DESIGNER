@@ -73,14 +73,27 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 4. Montar prompt e chamar OpenAI ──────────────────────────
+  // Formata data de YYYY-MM-DD para DD/MM/AAAA
+  const dataFormatada = data
+    ? data.split('-').reverse().join('/')
+    : 'data não informada'
+
+  const operadoresStr =
+    equipe.length > 0 ? equipe.join(', ') : 'os operadores'
+  const catAtv = [categoria, atividade].filter(Boolean).join(' - ') || 'atividade não informada'
+  const abertura = `No dia ${dataFormatada} no período de ${horario}, os operadores ${operadoresStr}, realizaram a ${catAtv}, e `
+
   const userPrompt = [
-    `Data: ${data}`,
-    `Horário: ${horario}`,
-    `Categoria: ${categoria || 'não informada'}`,
-    `Atividade: ${atividade || 'não informada'}`,
-    `Equipe: ${equipe.length > 0 ? equipe.join(', ') : 'não informada'}`,
-    '',
-    `Descrição bruta: ${descricaoBruta}`,
+    `Escreva o relatório operacional OBRIGATORIAMENTE iniciando com a seguinte frase (não altere nem omita nenhuma palavra desta abertura):`,
+    ``,
+    `"${abertura}"`,
+    ``,
+    `Em seguida, incorpore o texto abaixo ao relatório: corrija o português (ortografia, concordância nominal e verbal, semântica), torne-o mais claro e profissional, sem inventar fatos e sem deixá-lo excessivamente longo.`,
+    ``,
+    `Texto do operador:`,
+    `"${descricaoBruta}"`,
+    ``,
+    `Retorne APENAS o texto completo do relatório. Sem títulos, sem comentários, sem formatação adicional.`,
   ].join('\n')
 
   const openaiKey = process.env.OPENAI_API_KEY
