@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { RelatorioForm } from './RelatorioForm'
+import { SidebarNav } from '@/components/layout/SidebarNav'
 
 /** Formato retornado pelo Supabase ao selecionar operador com join de gaeps. */
 interface OperadorComGaep {
@@ -9,6 +10,7 @@ interface OperadorComGaep {
   nome_guerra: string
   gaep_id: string
   matricula: string
+  perfil: string
   gaeps: { id: string; codigo: string } | null
 }
 
@@ -57,7 +59,7 @@ export default async function RelatorioPage() {
     // Tentativa 1: pelo auth_id (rápido — O(1) pelo índice)
     const { data: byAuthId } = await admin
       .from('operadores')
-      .select('id, nome_guerra:nome, gaep_id, matricula, gaeps(id, codigo)')
+      .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, codigo)')
       .eq('auth_id', user.id)
       .is('deleted_at', null)
       .maybeSingle<OperadorComGaep>()
@@ -71,7 +73,7 @@ export default async function RelatorioPage() {
       if (matricula) {
         const { data: byMatricula } = await admin
           .from('operadores')
-          .select('id, nome_guerra:nome, gaep_id, matricula, gaeps(id, codigo)')
+          .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, codigo)')
           .eq('matricula', matricula)
           .is('deleted_at', null)
           .maybeSingle<OperadorComGaep>()
@@ -213,37 +215,44 @@ export default async function RelatorioPage() {
 
   // ── 6. Renderização ───────────────────────────────────────────
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        background: '#f3f4f6',
-        padding: '20px 16px',
-      }}
-    >
-      <div style={{ maxWidth: 430, margin: '0 auto' }}>
-        <div
-          style={{
-            textAlign: 'center',
-            fontSize: '1.35rem',
-            fontWeight: 800,
-            color: '#1a237e',
-            borderBottom: '2px solid #e2e8f0',
-            paddingBottom: 14,
-            marginBottom: 22,
-            letterSpacing: 0.3,
-          }}
-        >
-          REGISTRO OPERACIONAL
+    <>
+      <SidebarNav
+        nome={operadorAtual.nome_guerra}
+        gaepCodigo={gaep.codigo}
+        perfil={operadorAtual.perfil ?? 'OPERADOR'}
+      />
+      <main
+        style={{
+          minHeight: '100vh',
+          background: '#f3f4f6',
+          padding: '74px 16px 20px',
+        }}
+      >
+        <div style={{ maxWidth: 430, margin: '0 auto' }}>
+          <div
+            style={{
+              textAlign: 'center',
+              fontSize: '1.35rem',
+              fontWeight: 800,
+              color: '#1a237e',
+              borderBottom: '2px solid #e2e8f0',
+              paddingBottom: 14,
+              marginBottom: 22,
+              letterSpacing: 0.3,
+            }}
+          >
+            REGISTRO OPERACIONAL
+          </div>
+          <RelatorioForm
+            operadorAtual={{ id: operadorAtual.id, nome: operadorAtual.nome_guerra }}
+            gaepId={gaep.id}
+            gaepCodigo={gaep.codigo}
+            operadores={operadores}
+            categorias={categorias}
+            atividades={atividades}
+          />
         </div>
-        <RelatorioForm
-          operadorAtual={{ id: operadorAtual.id, nome: operadorAtual.nome_guerra }}
-          gaepId={gaep.id}
-          gaepCodigo={gaep.codigo}
-          operadores={operadores}
-          categorias={categorias}
-          atividades={atividades}
-        />
-      </div>
-    </main>
+      </main>
+    </>
   )
 }
