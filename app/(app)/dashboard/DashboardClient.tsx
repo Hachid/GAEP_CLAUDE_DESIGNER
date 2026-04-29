@@ -1,0 +1,106 @@
+'use client'
+
+import { useState, useTransition } from 'react'
+import { FiltrosDash } from '@/components/dashboard/FiltrosDash'
+import { KPIGrid } from '@/components/dashboard/KPIGrid'
+import { DonutCategoria } from '@/components/dashboard/DonutCategoria'
+import { RankingBars } from '@/components/dashboard/RankingBars'
+import { EvolucaoLinhas } from '@/components/dashboard/EvolucaoLinhas'
+import { refreshKPIData } from './actions'
+import type { KPIData, DashboardFiltros, EvolucaoMes } from './types'
+
+type Props = {
+  kpiInicial: KPIData
+  evolucaoInicial: EvolucaoMes[]
+  filtrosIniciais: DashboardFiltros
+  categorias: { id: string; nome: string }[]
+  atividades: { id: string; nome: string; categoria_id: string }[]
+}
+
+const cardStyle: React.CSSProperties = {
+  background: '#fff',
+  borderRadius: 12,
+  padding: 18,
+  marginBottom: 20,
+  boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
+  border: '1px solid #e2e8f0',
+}
+
+const cardTitleStyle: React.CSSProperties = {
+  textAlign: 'center',
+  fontWeight: 700,
+  color: '#1e293b',
+  fontSize: '0.95rem',
+  borderBottom: '1px solid #e2e8f0',
+  paddingBottom: 10,
+  marginBottom: 14,
+}
+
+export function DashboardClient({
+  kpiInicial,
+  evolucaoInicial,
+  filtrosIniciais,
+  categorias,
+  atividades,
+}: Props) {
+  const [kpi, setKpi] = useState<KPIData>(kpiInicial)
+  const [filtros, setFiltros] = useState<DashboardFiltros>(filtrosIniciais)
+  const [erroFiltro, setErroFiltro] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+
+  function handleAtualizar(novosFiltros: DashboardFiltros) {
+    setFiltros(novosFiltros)
+    setErroFiltro(null)
+    startTransition(async () => {
+      const result = await refreshKPIData(novosFiltros)
+      if (result.error) {
+        setErroFiltro(result.error)
+      } else if (result.data) {
+        setKpi(result.data)
+      }
+    })
+  }
+
+  return (
+    <div style={{ paddingBottom: 30 }}>
+      <FiltrosDash
+        filtros={filtros}
+        categorias={categorias}
+        atividades={atividades}
+        onAtualizar={handleAtualizar}
+        loading={isPending}
+      />
+
+      {erroFiltro && (
+        <div
+          style={{
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: 10,
+            padding: '12px 16px',
+            color: '#ef4444',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            marginBottom: 16,
+            textAlign: 'center',
+          }}
+        >
+          {erroFiltro}
+        </div>
+      )}
+
+      <KPIGrid kpi={kpi} />
+
+      <div style={cardStyle}>
+        <div style={cardTitleStyle}>Composição por Categoria</div>
+        <DonutCategoria data={kpi.porCategoria} />
+      </div>
+
+      <div style={cardStyle}>
+        <RankingBars data={kpi.rankingAtividades} />
+      </div>
+
+      <EvolucaoLinhas evolucao={evolucaoInicial} />
+    </div>
+  )
+}
