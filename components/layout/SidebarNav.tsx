@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 
 interface SidebarNavProps {
   nome: string
@@ -14,16 +14,29 @@ const NAV_ITEMS = [
   { href: '/relatorio', icon: '📝', label: 'Relatório', implemented: true },
   { href: '/dashboard', icon: '📊', label: 'Painel BI', implemented: true },
   { href: '/operadores', icon: '👮', label: 'Desempenho', implemented: true },
-  { href: '/missoes', icon: '✈️', label: 'Missões (Diárias)', implemented: false },
+  { href: '/missoes', icon: '✈️', label: 'Missões (Diárias)', implemented: true },
   { href: '/gestao', icon: '⚙️', label: 'Gestão', adminOnly: true, implemented: true },
 ] as const
 
 export function SidebarNav({ nome, gaepCodigo, perfil }: SidebarNavProps) {
   const [open, setOpen] = useState(false)
+  const [gestaoExpanded, setGestaoExpanded] = useState(false)
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(perfil)
+  const isSuperAdmin = perfil === 'SUPER_ADMIN'
+  const activeGestaoTab = searchParams.get('tab') ?? 'efetivo'
 
   const visible = NAV_ITEMS.filter((item) => !('adminOnly' in item && item.adminOnly) || isAdmin)
+  const gestaoSubItems = [
+    { href: '/gestao?tab=efetivo', icon: '👮', label: 'Efetivo', tab: 'efetivo' },
+    { href: '/gestao?tab=atividades', icon: '📋', label: 'Atividades', tab: 'atividades' },
+    { href: '/gestao?tab=feriados', icon: '📅', label: 'Feriados', tab: 'feriados' },
+    { href: '/gestao?tab=ia', icon: '🤖', label: 'Config IA', tab: 'ia' },
+    { href: '/gestao?tab=diarias', icon: '💰', label: 'Diárias', tab: 'diarias' },
+    { href: '/gestao?tab=importacao', icon: '📥', label: 'Importar', tab: 'importacao' },
+    ...(isSuperAdmin ? [{ href: '/gestao?tab=gaeps', icon: '🌐', label: 'GAEPs', tab: 'gaeps' }] : []),
+  ] as const
 
   return (
     <>
@@ -134,6 +147,7 @@ export function SidebarNav({ nome, gaepCodigo, perfil }: SidebarNavProps) {
         <div style={{ padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflowY: 'auto' }}>
           {visible.map((item) => {
             const active = pathname.startsWith(item.href)
+            const isGestao = item.href === '/gestao'
             if (!item.implemented) {
               return (
                 <div
@@ -159,29 +173,87 @@ export function SidebarNav({ nome, gaepCodigo, perfil }: SidebarNavProps) {
               )
             }
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '11px 14px',
-                  borderRadius: 10,
-                  border: `1px solid ${active ? 'rgba(26,35,126,0.15)' : 'transparent'}`,
-                  background: active ? 'rgba(26,35,126,0.08)' : 'transparent',
-                  color: active ? '#1a237e' : '#475569',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  fontWeight: active ? 700 : 600,
-                  textDecoration: 'none',
-                  transition: '0.15s',
-                }}
-              >
-                <span style={{ fontSize: '1.1rem' }}>{item.icon}</span>
-                {item.label}
-              </Link>
+              <div key={item.href}>
+                {isGestao ? (
+                  <button
+                    onClick={() => setGestaoExpanded((prev) => !prev)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '11px 14px',
+                      borderRadius: 10,
+                      border: `1px solid ${active ? 'rgba(26,35,126,0.15)' : 'transparent'}`,
+                      background: active ? 'rgba(26,35,126,0.08)' : 'transparent',
+                      color: active ? '#1a237e' : '#475569',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: active ? 700 : 600,
+                      textDecoration: 'none',
+                      transition: '0.15s',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    <span style={{ fontSize: '1.1rem' }}>{item.icon}</span>
+                    <span style={{ flex: 1, textAlign: 'left' }}>{item.label}</span>
+                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{gestaoExpanded || active ? '▾' : '▸'}</span>
+                  </button>
+                ) : (
+                  <Link
+                    href={item.href}
+                    onClick={() => setOpen(false)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '11px 14px',
+                      borderRadius: 10,
+                      border: `1px solid ${active ? 'rgba(26,35,126,0.15)' : 'transparent'}`,
+                      background: active ? 'rgba(26,35,126,0.08)' : 'transparent',
+                      color: active ? '#1a237e' : '#475569',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: active ? 700 : 600,
+                      textDecoration: 'none',
+                      transition: '0.15s',
+                    }}
+                  >
+                    <span style={{ fontSize: '1.1rem' }}>{item.icon}</span>
+                    {item.label}
+                  </Link>
+                )}
+                {(gestaoExpanded || active) && isGestao && (
+                  <div style={{ padding: '4px 0 6px 30px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {gestaoSubItems.map((sub) => {
+                      const subActive = pathname === '/gestao' && activeGestaoTab === sub.tab
+                      return (
+                        <Link
+                          key={sub.tab}
+                          href={sub.href}
+                          onClick={() => setOpen(false)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            padding: '8px 10px',
+                            borderRadius: 8,
+                            border: `1px solid ${subActive ? 'rgba(26,35,126,0.2)' : 'transparent'}`,
+                            background: subActive ? 'rgba(26,35,126,0.08)' : 'transparent',
+                            color: subActive ? '#1a237e' : '#64748b',
+                            textDecoration: 'none',
+                            fontSize: '0.82rem',
+                            fontWeight: subActive ? 700 : 600,
+                          }}
+                        >
+                          <span>{sub.icon}</span>
+                          {sub.label}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>

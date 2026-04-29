@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
   criarOperador,
   editarOperador,
@@ -1370,58 +1371,52 @@ function TabImportacaoRelatorios() {
 
 interface Tab {
   id: string
-  icon: string
   label: string
   comp: React.ReactNode
 }
 
 export function GestaoClient({ data }: { data: GestaoData }) {
   const isSuperAdmin = data.operadorAtual.perfil === 'SUPER_ADMIN'
-  const [tab, setTab] = useState('efetivo')
+  const searchParams = useSearchParams()
 
   const tabs: Tab[] = [
     {
       id: 'efetivo',
-      icon: '👮',
       label: 'Efetivo',
       comp: <TabEfetivo gaepId={data.gaep.id} initial={data.operadores} />,
     },
     {
       id: 'atividades',
-      icon: '📋',
       label: 'Atividades',
       comp: <TabAtividades initialAtividades={data.atividades} categorias={data.categorias} />,
     },
     {
       id: 'feriados',
-      icon: '📅',
       label: 'Feriados',
       comp: <TabFeriados gaepId={data.gaep.id} initial={data.feriados} />,
     },
     {
       id: 'ia',
-      icon: '🤖',
       label: 'Config IA',
       comp: <TabIA gaepId={data.gaep.id} operadorId={data.operadorAtual.id} initial={data.configIA} />,
     },
     {
       id: 'diarias',
-      icon: '💰',
       label: 'Diárias',
       comp: <TabDiarias initial={data.diarias} />,
     },
     {
       id: 'importacao',
-      icon: '📥',
       label: 'Importar',
       comp: <TabImportacaoRelatorios />,
     },
     ...(isSuperAdmin
-      ? [{ id: 'gaeps', icon: '🌐', label: 'GAEPs', comp: <TabGAEPs initial={data.gaeps} /> }]
+      ? [{ id: 'gaeps', label: 'GAEPs', comp: <TabGAEPs initial={data.gaeps} /> }]
       : []),
   ]
 
-  const current = tabs.find((t) => t.id === tab)
+  const tabParam = searchParams.get('tab') ?? 'efetivo'
+  const current = useMemo(() => tabs.find((t) => t.id === tabParam) ?? tabs[0], [tabParam, tabs])
 
   return (
     <div style={{ paddingBottom: 30 }}>
@@ -1452,80 +1447,8 @@ export function GestaoClient({ data }: { data: GestaoData }) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div
-        style={{
-          marginBottom: 18,
-          background: '#ffffff',
-          border: '1px solid #e2e8f0',
-          borderRadius: 14,
-          padding: 8,
-          boxShadow: '0 6px 16px rgba(15,23,42,0.06)',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 8,
-          }}
-        >
-          {tabs.map((t) => {
-            const active = tab === t.id
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                style={{
-                  flex: '1 1 110px',
-                  minWidth: 110,
-                  border: active ? '1px solid #1a237e' : '1px solid #e2e8f0',
-                  background: active
-                    ? 'linear-gradient(135deg, #1a237e 0%, #283593 100%)'
-                    : 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%)',
-                  color: active ? '#fff' : '#334155',
-                  borderRadius: 12,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  fontFamily: 'inherit',
-                  fontWeight: 700,
-                  boxShadow: active ? '0 8px 16px rgba(26,35,126,0.24)' : 'none',
-                  padding: '9px 10px',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    fontSize: '0.82rem',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 20,
-                      height: 20,
-                      borderRadius: '50%',
-                      background: active ? 'rgba(255,255,255,0.18)' : 'rgba(26,35,126,0.1)',
-                    }}
-                  >
-                    {t.icon}
-                  </span>
-                  <span>{t.label}</span>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
       {/* Conteúdo */}
-      <div key={tab}>{current?.comp}</div>
+      <div key={current?.id}>{current?.comp}</div>
     </div>
   )
 }
