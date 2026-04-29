@@ -13,6 +13,7 @@ interface SidebarNavProps {
 const NAV_ITEMS = [
   { href: '/relatorio', icon: '📝', label: 'Relatório', implemented: true },
   { href: '/dashboard', icon: '📊', label: 'Painel BI', implemented: true },
+  { href: '/operadores', icon: '👮', label: 'Desempenho', implemented: true },
   { href: '/missoes', icon: '✈️', label: 'Missões (Diárias)', implemented: false },
   { href: '/gestao', icon: '⚙️', label: 'Gestão', adminOnly: true, implemented: true },
 ] as const

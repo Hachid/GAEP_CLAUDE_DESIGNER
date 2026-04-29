@@ -1455,36 +1455,73 @@ export function GestaoClient({ data }: { data: GestaoData }) {
       {/* Tabs */}
       <div
         style={{
-          display: 'flex',
-          overflowX: 'auto',
-          gap: 6,
           marginBottom: 18,
-          paddingBottom: 2,
-          scrollbarWidth: 'none',
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderRadius: 14,
+          padding: 8,
+          boxShadow: '0 6px 16px rgba(15,23,42,0.06)',
         }}
       >
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            style={{
-              padding: '9px 14px',
-              borderRadius: 10,
-              border: 'none',
-              cursor: 'pointer',
-              fontWeight: 700,
-              fontSize: '0.78rem',
-              whiteSpace: 'nowrap',
-              transition: '0.2s',
-              fontFamily: 'inherit',
-              background: tab === t.id ? '#1a237e' : '#f1f5f9',
-              color: tab === t.id ? '#fff' : '#64748b',
-              boxShadow: tab === t.id ? '0 4px 12px rgba(26,35,126,0.25)' : 'none',
-            }}
-          >
-            {t.icon} {t.label}
-          </button>
-        ))}
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+          }}
+        >
+          {tabs.map((t) => {
+            const active = tab === t.id
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                style={{
+                  flex: '1 1 110px',
+                  minWidth: 110,
+                  border: active ? '1px solid #1a237e' : '1px solid #e2e8f0',
+                  background: active
+                    ? 'linear-gradient(135deg, #1a237e 0%, #283593 100%)'
+                    : 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%)',
+                  color: active ? '#fff' : '#334155',
+                  borderRadius: 12,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  fontFamily: 'inherit',
+                  fontWeight: 700,
+                  boxShadow: active ? '0 8px 16px rgba(26,35,126,0.24)' : 'none',
+                  padding: '9px 10px',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    fontSize: '0.82rem',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      background: active ? 'rgba(255,255,255,0.18)' : 'rgba(26,35,126,0.1)',
+                    }}
+                  >
+                    {t.icon}
+                  </span>
+                  <span>{t.label}</span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Conteúdo */}
