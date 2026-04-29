@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import {
   BarChart,
   Bar,
@@ -74,12 +73,7 @@ function CategoriaBarChart({
 }
 
 export function RankingBars({ data }: Props) {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-
   const categorias = CAT_ORDER.filter((cat) => data.some((d) => d.categoriaNome === cat))
-
-  if (!mounted) return <div style={{ minHeight: 160 }} />
 
   if (data.length === 0) {
     return (

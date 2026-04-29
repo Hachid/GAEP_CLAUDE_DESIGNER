@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   LineChart,
   Line,
@@ -26,9 +26,7 @@ type Props = {
 }
 
 export function EvolucaoLinhas({ evolucao }: Props) {
-  const [mounted, setMounted] = useState(false)
   const [periodo, setPeriodo] = useState<PeriodoId>('semestral')
-  useEffect(() => setMounted(true), [])
 
   const periodoConfig = PERIODOS.find((p) => p.id === periodo)!
   const sliced =
@@ -96,9 +94,7 @@ export function EvolucaoLinhas({ evolucao }: Props) {
         ))}
       </div>
 
-      {!mounted ? (
-        <div style={{ height: 260 }} />
-      ) : chartData.length === 0 ? (
+      {chartData.length === 0 ? (
         <div
           style={{
             height: 260,

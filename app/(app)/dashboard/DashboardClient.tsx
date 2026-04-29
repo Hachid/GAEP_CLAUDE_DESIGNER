@@ -1,13 +1,25 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import dynamic from 'next/dynamic'
 import { FiltrosDash } from '@/components/dashboard/FiltrosDash'
 import { KPIGrid } from '@/components/dashboard/KPIGrid'
-import { DonutCategoria } from '@/components/dashboard/DonutCategoria'
-import { RankingBars } from '@/components/dashboard/RankingBars'
-import { EvolucaoLinhas } from '@/components/dashboard/EvolucaoLinhas'
 import { refreshKPIData } from './actions'
 import type { KPIData, DashboardFiltros, EvolucaoMes } from './types'
+
+// Recharts usa APIs de browser — carrega apenas no cliente para evitar erro de hidratação
+const DonutCategoria = dynamic(
+  () => import('@/components/dashboard/DonutCategoria').then((m) => m.DonutCategoria),
+  { ssr: false, loading: () => <div style={{ height: 240 }} /> }
+)
+const RankingBars = dynamic(
+  () => import('@/components/dashboard/RankingBars').then((m) => m.RankingBars),
+  { ssr: false, loading: () => <div style={{ minHeight: 160 }} /> }
+)
+const EvolucaoLinhas = dynamic(
+  () => import('@/components/dashboard/EvolucaoLinhas').then((m) => m.EvolucaoLinhas),
+  { ssr: false, loading: () => <div style={{ height: 320 }} /> }
+)
 
 type Props = {
   kpiInicial: KPIData

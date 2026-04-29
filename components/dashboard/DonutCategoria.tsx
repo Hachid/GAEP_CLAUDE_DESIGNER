@@ -1,14 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
+import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts'
 import type { CategoriaStat } from '@/app/(app)/dashboard/types'
 import { formatMinutos, CAT_COLORS } from '@/app/(app)/dashboard/utils'
 
@@ -17,17 +9,11 @@ type Props = {
 }
 
 export function DonutCategoria({ data }: Props) {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-
   const chartData = data.map((d) => ({
     name: `${d.nome.charAt(0) + d.nome.slice(1).toLowerCase()}  ${formatMinutos(d.totalMinutos)}`,
     value: d.totalMinutos,
     color: CAT_COLORS[d.nome] ?? '#94a3b8',
-    rawNome: d.nome,
   }))
-
-  if (!mounted) return <div style={{ height: 240 }} />
 
   if (chartData.length === 0) {
     return (
