@@ -16,12 +16,42 @@ type RelRow = {
   hora_inicio: string
   hora_fim: string
   atividade_id: string
-  atividades: {
-    id: string
-    nome: string
-    categoria_id: string
-    categorias_atividade: { id: string; nome: string }
-  } | null
+  atividades:
+    | {
+        id: string
+        nome: string
+        categoria_id: string
+        categorias_atividade: { id: string; nome: string } | { id: string; nome: string }[]
+      }
+    | {
+        id: string
+        nome: string
+        categoria_id: string
+        categorias_atividade: { id: string; nome: string } | { id: string; nome: string }[]
+      }[]
+    | null
+}
+
+type AtividadeNested = {
+  id: string
+  nome: string
+  categoria_id: string
+  categorias_atividade: { id: string; nome: string } | { id: string; nome: string }[]
+}
+
+function pickFirst<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null
+  return Array.isArray(value) ? (value[0] ?? null) : value
+}
+
+function normalizeAtividade(value: RelRow['atividades']): AtividadeNested | null {
+  return pickFirst(value)
+}
+
+function normalizeCategoria(
+  value: AtividadeNested['categorias_atividade']
+): { id: string; nome: string } | null {
+  return pickFirst(value)
 }
 
 async function computeKPI(gaepId: string, filtros: DashboardFiltros): Promise<KPIData> {
@@ -65,10 +95,11 @@ async function computeKPI(gaepId: string, filtros: DashboardFiltros): Promise<KP
   let totalMinutos = 0
 
   for (const r of rows) {
-    if (!r.atividades) continue
+    const at = normalizeAtividade(r.atividades)
+    if (!at) continue
+    const cat = normalizeCategoria(at.categorias_atividade)
+    if (!cat) continue
     const mins = minutesBetween(r.hora_inicio, r.hora_fim)
-    const cat = r.atividades.categorias_atividade
-    const at = r.atividades
 
     totalMinutos += mins
 
@@ -148,11 +179,17 @@ type EvoRow = {
 export async function fetchEvolucao(gaepId: string): Promise<EvolucaoMes[]> {
   const admin = createAdminClient()
 
+  const dataMinima = new Date()
+  dataMinima.setMonth(dataMinima.getMonth() - 11)
+  dataMinima.setDate(1)
+  const dataCorte = dataMinima.toISOString().slice(0, 10)
+
   const { data } = await admin
     .from('relatorios')
     .select('data, hora_inicio, hora_fim')
     .eq('gaep_id', gaepId)
     .is('deleted_at', null)
+    .gte('data', dataCorte)
     .order('data')
 
   const rows = (data ?? []) as EvoRow[]

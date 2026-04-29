@@ -1249,6 +1249,7 @@ function TabImportacaoRelatorios() {
   const [resultado, setResultado] = useState('')
   const [errorLines, setErrorLines] = useState<Array<{ line: number; reason: string }>>([])
   const [pending, startTransition] = useTransition()
+  const [pendingMissoes, startTransitionMissoes] = useTransition()
 
   function showToast(msg: string) {
     setToast(msg)
@@ -1268,6 +1269,14 @@ function TabImportacaoRelatorios() {
       const msg = `✅ Importação concluída. Inseridos: ${res.inserted ?? 0}, atualizados: ${res.updated ?? 0}, ignorados: ${res.skipped ?? 0}.`
       setResultado(msg)
       showToast(msg)
+    })
+  }
+
+  function handleUploadMissoes(file: File | null) {
+    if (!file) return
+    startTransitionMissoes(async () => {
+      await file.text()
+      showToast('⚠️ Upload de CSV de missões recebido. A rotina de importação será conectada no próximo passo.')
     })
   }
 
@@ -1322,6 +1331,63 @@ function TabImportacaoRelatorios() {
           </div>
           <div style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.7 }}>
             Campos obrigatórios no modelo: <code>gaep_codigo</code>, <code>relator_matricula</code>, <code>data</code>, <code>hora_inicio</code>, <code>hora_fim</code>, <code>categoria_nome</code>, <code>atividade_nome</code>, <code>descricao_revisada</code>.
+          </div>
+          <div
+            style={{
+              marginTop: 16,
+              paddingTop: 14,
+              borderTop: '1px dashed #cbd5e1',
+            }}
+          >
+            <div style={{ fontSize: '0.86rem', color: '#1e293b', fontWeight: 800, marginBottom: 8 }}>
+              Importação de Missões (CSV)
+            </div>
+            <p style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.6, marginTop: 0, marginBottom: 10 }}>
+              Baixe o modelo de missões para migração do sistema anterior. O separador esperado também é <strong>ponto e vírgula (;)</strong>.
+            </p>
+            <a
+              href="/modelos/importacao-missoes-template.csv"
+              download
+              style={{
+                display: 'inline-block',
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: '#1a237e',
+                color: '#fff',
+                textDecoration: 'none',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+                marginBottom: 8,
+              }}
+            >
+              ⬇️ Baixar modelo CSV de Missões
+            </a>
+            <label
+              style={{
+                display: 'inline-block',
+                marginLeft: 10,
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: pendingMissoes ? '#94a3b8' : '#16a34a',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+                cursor: pendingMissoes ? 'not-allowed' : 'pointer',
+                marginBottom: 8,
+              }}
+            >
+              {pendingMissoes ? '⏳ Enviando...' : '📤 Enviar CSV'}
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                disabled={pendingMissoes}
+                style={{ display: 'none' }}
+                onChange={(e) => handleUploadMissoes(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            <div style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.7 }}>
+              Campos obrigatórios no modelo: <code>gaep_codigo</code>, <code>operador_matricula</code>, <code>tipo_missao</code>, <code>qtd</code>, <code>valor_unitario</code>.
+            </div>
           </div>
           {resultado && (
             <div

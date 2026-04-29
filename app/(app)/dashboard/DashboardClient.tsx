@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import { FiltrosDash } from '@/components/dashboard/FiltrosDash'
 import { KPIGrid } from '@/components/dashboard/KPIGrid'
@@ -56,17 +55,10 @@ export function DashboardClient({
   categorias,
   atividades,
 }: Props) {
-  const router = useRouter()
   const [kpi, setKpi] = useState<KPIData>(kpiInicial)
   const [filtros, setFiltros] = useState<DashboardFiltros>(filtrosIniciais)
   const [erroFiltro, setErroFiltro] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-
-  // Atualiza dados do servidor a cada 30 segundos
-  useEffect(() => {
-    const id = setInterval(() => router.refresh(), 30_000)
-    return () => clearInterval(id)
-  }, [router])
 
   function handleAtualizar(novosFiltros: DashboardFiltros) {
     setFiltros(novosFiltros)
