@@ -31,6 +31,21 @@ export interface SalvarRelatorioResult {
 }
 
 /**
+ * Regras de obrigatoriedade para persistência de relatório.
+ * Mantém validação defensiva no backend (além da validação do formulário).
+ */
+function validarObrigatoriosSalvarRelatorio(input: SalvarRelatorioInput): string | null {
+  if (!input.data) return 'Data da operação é obrigatória.'
+  if (!input.horaInicio || !input.horaFim) return 'Horário inicial e final são obrigatórios.'
+  if (!input.categoriaId) return 'Categoria da operação é obrigatória.'
+  if (!input.atividadeId) return 'Atividade da operação é obrigatória.'
+  if (!Array.isArray(input.equipe) || input.equipe.length === 0) {
+    return 'Selecione ao menos um operador na equipe.'
+  }
+  return null
+}
+
+/**
  * Server Action — salva um relatório operacional no Supabase.
  *
  * Ordem das operações:
@@ -58,11 +73,12 @@ export async function salvarRelatorio(
   }
 
   // ── 2. Validações mínimas de negócio ─────────────────────────
+  const erroObrigatorios = validarObrigatoriosSalvarRelatorio(input)
+  if (erroObrigatorios) {
+    return { error: `⚠️ ${erroObrigatorios}` }
+  }
   if (!input.descricaoRevisada.trim()) {
     return { error: 'A descrição revisada não pode estar vazia.' }
-  }
-  if (!input.data) {
-    return { error: 'A data da operação é obrigatória.' }
   }
 
   const admin = createAdminClient()

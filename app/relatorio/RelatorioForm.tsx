@@ -231,8 +231,26 @@ export function RelatorioForm({
   const atividadeSelecionada = atividades.find((a) => a.id === atividadeId)
   const equipeNomes = operadores.filter((o) => equipe.includes(o.id)).map((o) => o.nome)
 
+  /**
+   * Valida os campos obrigatórios para salvar/consolidar o relatório.
+   * Retorna a primeira mensagem de erro orientada ao relatorista.
+   */
+  function validarCamposObrigatorios(): string | null {
+    if (!data) return 'Preencha a data da operação para salvar o relatório.'
+    if (!horaInicio || !horaFim) return 'Preencha horário inicial e final da operação.'
+    if (equipe.length === 0) return 'Selecione ao menos um operador na equipe.'
+    if (!categoriaId) return 'Selecione a categoria da operação.'
+    if (!atividadeId) return 'Selecione a atividade realizada.'
+    return null
+  }
+
   /** Salva o relatório sem passar pela IA (descrição bruta vira descrição oficial). */
   async function handleSalvarDireto() {
+    const erroCampos = validarCamposObrigatorios()
+    if (erroCampos) {
+      setFeedback({ tipo: 'err', msg: `⚠️ ${erroCampos}` })
+      return
+    }
     if (!descricao.trim()) {
       setFeedback({ tipo: 'err', msg: 'Preencha a descrição antes de salvar.' })
       return
@@ -272,6 +290,11 @@ export function RelatorioForm({
 
   /** Envia a descrição bruta para o GPT-4o e exibe o texto revisado na AreaRevisao. */
   async function handleRedigirIA() {
+    const erroCampos = validarCamposObrigatorios()
+    if (erroCampos) {
+      setFeedback({ tipo: 'err', msg: `⚠️ ${erroCampos}` })
+      return
+    }
     if (!descricao.trim()) {
       setFeedback({ tipo: 'err', msg: 'Preencha a descrição antes de redigir.' })
       return
@@ -318,6 +341,11 @@ export function RelatorioForm({
    * Chamado pelo botão "Salvar & Consolidar Turno" dentro de AreaRevisao.
    */
   async function handleSalvarConsolidado(descricaoFinal: string, ocorrencias: string) {
+    const erroCampos = validarCamposObrigatorios()
+    if (erroCampos) {
+      setFeedback({ tipo: 'err', msg: `⚠️ ${erroCampos}` })
+      return
+    }
     setSalvando(true)
     setFeedback(null)
     try {
@@ -409,6 +437,9 @@ export function RelatorioForm({
             ))}
           </select>
         </div>
+      </div>
+      <div style={{ marginTop: -10, marginBottom: 16, fontSize: '0.76rem', color: '#64748b', lineHeight: 1.5 }}>
+        Campos obrigatórios para salvar: <strong>data</strong>, <strong>horários</strong>, <strong>equipe (mín. 1)</strong>, <strong>categoria</strong> e <strong>atividade</strong>.
       </div>
 
       {/* Equipe chips */}

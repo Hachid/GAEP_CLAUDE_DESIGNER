@@ -13,7 +13,6 @@ import {
   removerFeriado,
   salvarConfigIA,
   salvarConfigRelatorio,
-  salvarMargensPdf,
   salvarTimbradoBase64,
   removerTimbrado,
   testarPromptIA,
@@ -1330,13 +1329,13 @@ function StyleEditor({
             style={mInput}
           />
         </FormField>
-        <FormField label="Recuo (px)">
+        <FormField label="Recuo (px) ← →">
           <input
             type="number"
             value={value.indent}
-            min={0}
-            max={80}
-            onChange={(e) => onChange({ ...value, indent: Number(e.target.value || 0) })}
+            min={-300}
+            max={300}
+            onChange={(e) => onChange({ ...value, indent: Number(e.target.value) })}
             style={mInput}
           />
         </FormField>
@@ -1457,7 +1456,7 @@ function PreviewRelatorio({ cfg, gaepCodigo }: { cfg: ConfigRelatorioUIData; gae
     fontFamily: cfg.tituloEstilo.fontFamily,
     color: cfg.tituloEstilo.fontColor,
     textAlign: cfg.tituloEstilo.align,
-    paddingLeft: `${cfg.tituloEstilo.indent}px`,
+    marginLeft: `${cfg.tituloEstilo.indent}px`,
     lineHeight: cfg.tituloEstilo.lineHeight,
     fontSize: `${cfg.tituloEstilo.fontSize ?? 12}pt`,
     fontWeight: cfg.tituloEstilo.bold === false ? 'normal' : 'bold',
@@ -1473,7 +1472,7 @@ function PreviewRelatorio({ cfg, gaepCodigo }: { cfg: ConfigRelatorioUIData; gae
     fontFamily: cfg.subtituloEstilo.fontFamily,
     color: cfg.subtituloEstilo.fontColor,
     textAlign: cfg.subtituloEstilo.align,
-    paddingLeft: `${cfg.subtituloEstilo.indent}px`,
+    marginLeft: `${cfg.subtituloEstilo.indent}px`,
     lineHeight: cfg.subtituloEstilo.lineHeight,
     fontSize: `${cfg.subtituloEstilo.fontSize ?? 11}pt`,
     fontWeight: cfg.subtituloEstilo.bold ? 'bold' : 'normal',
@@ -1488,7 +1487,7 @@ function PreviewRelatorio({ cfg, gaepCodigo }: { cfg: ConfigRelatorioUIData; gae
     fontFamily: cfg.descricaoEstilo.fontFamily,
     color: cfg.descricaoEstilo.fontColor,
     textAlign: cfg.descricaoEstilo.align,
-    paddingLeft: `${cfg.descricaoEstilo.indent}px`,
+    marginLeft: `${cfg.descricaoEstilo.indent}px`,
     lineHeight: cfg.descricaoEstilo.lineHeight,
     fontSize: `${cfg.descricaoEstilo.fontSize ?? 11}pt`,
     fontWeight: cfg.descricaoEstilo.bold ? 'bold' : 'normal',
@@ -1501,7 +1500,7 @@ function PreviewRelatorio({ cfg, gaepCodigo }: { cfg: ConfigRelatorioUIData; gae
     fontFamily: cfg.rodapeEstilo.fontFamily,
     color: cfg.rodapeEstilo.fontColor,
     textAlign: cfg.rodapeEstilo.align,
-    paddingLeft: `${cfg.rodapeEstilo.indent}px`,
+    marginLeft: `${cfg.rodapeEstilo.indent}px`,
     lineHeight: cfg.rodapeEstilo.lineHeight,
     fontSize: `${cfg.rodapeEstilo.fontSize ?? 8}pt`,
     fontWeight: cfg.rodapeEstilo.bold ? 'bold' : 'normal',
@@ -1535,14 +1534,14 @@ function PreviewRelatorio({ cfg, gaepCodigo }: { cfg: ConfigRelatorioUIData; gae
             backgroundRepeat: 'no-repeat',
           }}
         >
-          {/* Área de conteúdo — mesmas proporções do print-page-content */}
+          {/* Área de conteúdo espelhando print-page-content com as margens configuradas */}
           <div
             style={{
               position: 'absolute',
-              top: '18.5%',
-              left: '15.2%',
-              right: '5.7%',
-              bottom: '9.4%',
+              top: cfg.printMargins.top * (A4_H / 297),
+              left: cfg.printMargins.left * (A4_W / 210),
+              right: cfg.printMargins.right * (A4_W / 210),
+              bottom: cfg.printMargins.bottom * (A4_H / 297),
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
@@ -1566,7 +1565,7 @@ function PreviewRelatorio({ cfg, gaepCodigo }: { cfg: ConfigRelatorioUIData; gae
   )
 }
 
-type SubTabRelatorio = 'timbrado' | 'titulo' | 'subtitulo' | 'descricao' | 'rodape'
+type SubTabRelatorio = 'timbrado' | 'titulo' | 'subtitulo' | 'descricao' | 'rodape' | 'margens'
 
 const SUB_TAB_LABELS: Record<SubTabRelatorio, string> = {
   timbrado: '🖼 Timbrado',
@@ -1574,6 +1573,7 @@ const SUB_TAB_LABELS: Record<SubTabRelatorio, string> = {
   subtitulo: 'Subtítulo',
   descricao: 'Descrição',
   rodape: 'Rodapé',
+  margens: '📐 Margens',
 }
 
 function TabRelatorio({
@@ -1832,6 +1832,41 @@ function TabRelatorio({
             </>
           )}
 
+          {/* Sub-aba: Margens */}
+          {subTab === 'margens' && (
+            <>
+              <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.6, marginBottom: 10 }}>
+                Distância em mm entre a borda da folha A4 e o início do conteúdo. O preview atualiza em tempo real.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <FormField label="Superior (mm)">
+                  <input type="number" min={0} max={80} step={0.5}
+                    value={cfg.printMargins.top}
+                    onChange={(e) => setCfg((prev) => ({ ...prev, printMargins: { ...prev.printMargins, top: Number(e.target.value) } }))}
+                    style={mInput} />
+                </FormField>
+                <FormField label="Direita (mm)">
+                  <input type="number" min={0} max={80} step={0.5}
+                    value={cfg.printMargins.right}
+                    onChange={(e) => setCfg((prev) => ({ ...prev, printMargins: { ...prev.printMargins, right: Number(e.target.value) } }))}
+                    style={mInput} />
+                </FormField>
+                <FormField label="Inferior (mm)">
+                  <input type="number" min={0} max={80} step={0.5}
+                    value={cfg.printMargins.bottom}
+                    onChange={(e) => setCfg((prev) => ({ ...prev, printMargins: { ...prev.printMargins, bottom: Number(e.target.value) } }))}
+                    style={mInput} />
+                </FormField>
+                <FormField label="Esquerda (mm)">
+                  <input type="number" min={0} max={80} step={0.5}
+                    value={cfg.printMargins.left}
+                    onChange={(e) => setCfg((prev) => ({ ...prev, printMargins: { ...prev.printMargins, left: Number(e.target.value) } }))}
+                    style={mInput} />
+                </FormField>
+              </div>
+            </>
+          )}
+
           {/* Toggle de preview */}
           <button
             onClick={() => setShowPreview((v) => !v)}
@@ -1883,15 +1918,12 @@ function TabDiarias({
   initial,
   gaepId,
   operadorId,
-  initialMargins,
 }: {
   initial: DiariaRow[]
   gaepId: string
   operadorId: string
-  initialMargins: { top: number; right: number; bottom: number; left: number }
 }) {
   const [diarias, setDiarias] = useState<DiariaRow[]>(initial)
-  const [margins, setMargins] = useState(initialMargins)
   const [editando, setEditando] = useState<string | null>(null)
   const [form, setForm] = useState<{ locais: string; valor: number }>({ locais: '', valor: 0 })
   const [toast, setToast] = useState('')
@@ -1900,14 +1932,6 @@ function TabDiarias({
   function showToast(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(''), 3000)
-  }
-
-  function salvarMargens() {
-    startTransition(async () => {
-      const res = await salvarMargensPdf(gaepId, operadorId, margins)
-      if (res.error) { showToast(`❌ ${res.error}`); return }
-      showToast('✅ Margens de impressão atualizadas!')
-    })
   }
 
   function iniciarEdicao(d: DiariaRow) {
@@ -1942,74 +1966,6 @@ function TabDiarias({
       >
         ⚠️ Alterações de valor <strong>não retroagem</strong> em missões já registradas. O valor antigo fica como snapshot.
       </div>
-
-      <AdminCard>
-        <SectionHeader title="Margens de Impressão (PDF)" />
-        <div style={{ padding: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <FormField label="Superior (mm)">
-              <input
-                type="number"
-                min={0}
-                max={40}
-                step={0.5}
-                value={margins.top}
-                onChange={(e) => setMargins((m) => ({ ...m, top: Number(e.target.value) }))}
-                style={mInput}
-              />
-            </FormField>
-            <FormField label="Direita (mm)">
-              <input
-                type="number"
-                min={0}
-                max={40}
-                step={0.5}
-                value={margins.right}
-                onChange={(e) => setMargins((m) => ({ ...m, right: Number(e.target.value) }))}
-                style={mInput}
-              />
-            </FormField>
-            <FormField label="Inferior (mm)">
-              <input
-                type="number"
-                min={0}
-                max={40}
-                step={0.5}
-                value={margins.bottom}
-                onChange={(e) => setMargins((m) => ({ ...m, bottom: Number(e.target.value) }))}
-                style={mInput}
-              />
-            </FormField>
-            <FormField label="Esquerda (mm)">
-              <input
-                type="number"
-                min={0}
-                max={40}
-                step={0.5}
-                value={margins.left}
-                onChange={(e) => setMargins((m) => ({ ...m, left: Number(e.target.value) }))}
-                style={mInput}
-              />
-            </FormField>
-          </div>
-          <button
-            onClick={salvarMargens}
-            disabled={pending}
-            style={{
-              width: '100%',
-              padding: 12,
-              background: pending ? '#94a3b8' : '#1a237e',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 10,
-              fontWeight: 700,
-              cursor: pending ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {pending ? '⏳ Salvando...' : 'Salvar Margens'}
-          </button>
-        </div>
-      </AdminCard>
 
       {diarias.map((d) => (
         <AdminCard key={d.id}>
@@ -2483,7 +2439,6 @@ export function GestaoClient({ data }: { data: GestaoData }) {
           initial={data.diarias}
           gaepId={data.gaep.id}
           operadorId={data.operadorAtual.id}
-          initialMargins={data.configRelatorio.printMargins}
         />
       ),
     },
