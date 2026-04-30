@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { RelatorioDetalhado } from '../actions'
@@ -13,6 +13,8 @@ interface Props {
   operadorId: string
   gaepCodigo: string
   configRelatorio: ConfigRelatorioUIData
+  /** Abre o diálogo de impressão/PDF ao carregar (timbrado e estilos da gestão). */
+  autoPrintPdf?: boolean
 }
 
 function formatarData(dataISO: string): string {
@@ -50,8 +52,15 @@ export function RelatorioDetalheClient({
   operadorId,
   gaepCodigo,
   configRelatorio,
+  autoPrintPdf = false,
 }: Props) {
   const router = useRouter()
+
+  useEffect(() => {
+    if (!autoPrintPdf) return
+    const id = window.setTimeout(() => window.print(), 600)
+    return () => window.clearTimeout(id)
+  }, [autoPrintPdf])
   const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(perfil)
 
   const [editando, setEditando] = useState(false)
@@ -73,6 +82,15 @@ export function RelatorioDetalheClient({
     textAlign: configRelatorio.tituloEstilo.align,
     paddingLeft: `${configRelatorio.tituloEstilo.indent}px`,
     lineHeight: configRelatorio.tituloEstilo.lineHeight,
+    fontSize: `${configRelatorio.tituloEstilo.fontSize ?? 12}pt`,
+  }
+  const subtituloPrintStyle: React.CSSProperties = {
+    fontFamily: configRelatorio.subtituloEstilo.fontFamily,
+    color: configRelatorio.subtituloEstilo.fontColor,
+    textAlign: configRelatorio.subtituloEstilo.align,
+    paddingLeft: `${configRelatorio.subtituloEstilo.indent}px`,
+    lineHeight: configRelatorio.subtituloEstilo.lineHeight,
+    fontSize: `${configRelatorio.subtituloEstilo.fontSize ?? 11}pt`,
   }
   const descricaoPrintStyle: React.CSSProperties = {
     fontFamily: configRelatorio.descricaoEstilo.fontFamily,
@@ -80,6 +98,7 @@ export function RelatorioDetalheClient({
     textAlign: configRelatorio.descricaoEstilo.align,
     paddingLeft: `${configRelatorio.descricaoEstilo.indent}px`,
     lineHeight: configRelatorio.descricaoEstilo.lineHeight,
+    fontSize: `${configRelatorio.descricaoEstilo.fontSize ?? 11}pt`,
   }
   const rodapePrintStyle: React.CSSProperties = {
     fontFamily: configRelatorio.rodapeEstilo.fontFamily,
@@ -87,7 +106,15 @@ export function RelatorioDetalheClient({
     textAlign: configRelatorio.rodapeEstilo.align,
     paddingLeft: `${configRelatorio.rodapeEstilo.indent}px`,
     lineHeight: configRelatorio.rodapeEstilo.lineHeight,
+    fontSize: `${configRelatorio.rodapeEstilo.fontSize ?? 8}pt`,
   }
+
+  const legendaStr = [
+    `Data: ${dataFmt}`,
+    `${formatarHora(relatorio.hora_inicio)} às ${formatarHora(relatorio.hora_fim)}`,
+    categoriaNome ? `Categoria: ${categoriaNome}` : '',
+    atividadeNome ? `Atividade: ${atividadeNome}` : '',
+  ].filter(Boolean).join(' | ')
 
   async function handleSalvarEdicao() {
     if (!descricaoEdit.trim()) { setErro('A descrição não pode estar vazia.'); return }
@@ -306,67 +333,59 @@ export function RelatorioDetalheClient({
           tamanho A4, e .print-page-content posiciona o conteúdo
           dentro da área branca do timbrado.
       ══════════════════════════════════════════ */}
-      <div className="print-page">
+      <div
+        className="print-page"
+        style={configRelatorio.timbradoUrl ? {
+          backgroundImage: `url(${configRelatorio.timbradoUrl})`,
+          backgroundSize: '100% 100%',
+          backgroundRepeat: 'no-repeat',
+        } : undefined}
+      >
         <div className="print-page-content">
 
-          {/* Título centralizado */}
-          <div style={{ ...tituloPrintStyle, marginBottom: '6mm', paddingBottom: '4mm', borderBottom: '1.5px solid #333' }}>
-            <div style={{ fontSize: '14pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '2px' }}>
-              {configRelatorio.tituloTexto || 'RELATÓRIO OPERACIONAL'}
-            </div>
-            <div style={{ fontSize: '10pt', marginTop: '2mm', color: '#333' }}>
-              {gaepCodigo} · Polícia Penal Federal
-            </div>
+          {/* Título — nome da organização (multi-linha) */}
+          <div style={{ ...tituloPrintStyle, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '2mm', whiteSpace: 'pre-line' }}>
+            {configRelatorio.tituloTexto || 'RELATÓRIO OPERACIONAL'}
           </div>
 
-          {/* Metadados em tabela */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '5mm', fontSize: '10pt' }}>
-            <tbody>
-              <tr>
-                <td style={{ paddingBottom: '2mm', width: '50%' }}>
-                  <strong>Data:</strong> {dataFmt}
-                </td>
-                <td style={{ paddingBottom: '2mm' }}>
-                  <strong>Período:</strong> {periodoStr}
-                </td>
-              </tr>
-              {(categoriaNome || atividadeNome) && (
-                <tr>
-                  {categoriaNome && (
-                    <td style={{ paddingBottom: '2mm' }}>
-                      <strong>Categoria:</strong> {categoriaNome}
+          {/* Subtítulo — tipo do documento */}
+          <div style={{ ...subtituloPrintStyle, marginBottom: '3mm', paddingBottom: '3mm', borderBottom: '1.5px solid #333' }}>
+            {configRelatorio.subtituloTexto || 'RELATÓRIO DE ATIVIDADE(S)'}
+          </div>
+
+          {/* Legenda — metadados em linha */}
+          <div style={{ fontSize: '9pt', color: '#333', marginBottom: '4mm', lineHeight: 1.5 }}>
+            {legendaStr}
+          </div>
+
+          {/* Participantes */}
+          {(equipeStr || relatorio.outros_integrantes || relatorio.relatorista_nome) && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '4mm', fontSize: '9pt' }}>
+              <tbody>
+                {equipeStr && (
+                  <tr>
+                    <td style={{ paddingBottom: '1.5mm' }}>
+                      <strong>Equipe:</strong> {equipeStr}
                     </td>
-                  )}
-                  {atividadeNome && (
-                    <td style={{ paddingBottom: '2mm' }}>
-                      <strong>Atividade:</strong> {atividadeNome}
+                  </tr>
+                )}
+                {relatorio.outros_integrantes && (
+                  <tr>
+                    <td style={{ paddingBottom: '1.5mm' }}>
+                      <strong>Outros Integrantes:</strong> {relatorio.outros_integrantes}
                     </td>
-                  )}
-                </tr>
-              )}
-              {equipeStr && (
-                <tr>
-                  <td colSpan={2} style={{ paddingBottom: '2mm' }}>
-                    <strong>Equipe:</strong> {equipeStr}
-                  </td>
-                </tr>
-              )}
-              {relatorio.outros_integrantes && (
-                <tr>
-                  <td colSpan={2} style={{ paddingBottom: '2mm' }}>
-                    <strong>Outros Integrantes:</strong> {relatorio.outros_integrantes}
-                  </td>
-                </tr>
-              )}
-              {relatorio.relatorista_nome && (
-                <tr>
-                  <td colSpan={2}>
-                    <strong>Relatorista:</strong> {relatorio.relatorista_nome}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                  </tr>
+                )}
+                {relatorio.relatorista_nome && (
+                  <tr>
+                    <td>
+                      <strong>Relatorista:</strong> {relatorio.relatorista_nome}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
 
           {/* Linha divisória */}
           <hr style={{ border: 'none', borderTop: '1px solid #555', margin: '4mm 0' }} />
@@ -376,7 +395,7 @@ export function RelatorioDetalheClient({
             <div style={{ fontSize: '9pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#555', marginBottom: '3mm' }}>
               Texto do Relatório
             </div>
-            <p style={{ margin: 0, fontSize: '11pt', whiteSpace: 'pre-wrap', ...descricaoPrintStyle }}>
+            <p style={{ margin: 0, whiteSpace: 'pre-wrap', ...descricaoPrintStyle }}>
               {configRelatorio.descricaoTexto ? `${configRelatorio.descricaoTexto}\n\n` : ''}
               {relatorio.descricao_revisada}
             </p>

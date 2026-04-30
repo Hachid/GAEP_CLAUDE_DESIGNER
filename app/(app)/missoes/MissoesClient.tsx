@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { registrarMissao, editarObservacaoMissao, excluirMissao } from './actions'
+import { registrarMissao, editarMissao, excluirMissao } from './actions'
 
 // ── Tipos ─────────────────────────────────────────────────────
 
@@ -140,11 +140,28 @@ function FormRegistro({ operadores, tiposMissao, operadorAtualId, onRegistrada, 
   }
 
   function salvar() {
-    if (!form.operadorId || !form.tipoMissaoId || form.qtd < 1) return
+    const operadorSelecionado = form.operadorId
+      ? operadores.find((o) => o.id === form.operadorId)
+      : operadores.find(
+          (o) => o.nome.trim().toLowerCase() === operadorBusca.trim().toLowerCase()
+        )
+
+    if (!operadorSelecionado) {
+      onToast('❌ Selecione um operador válido na lista.')
+      return
+    }
+    if (!form.tipoMissaoId) {
+      onToast('❌ Selecione o tipo de diária.')
+      return
+    }
+    if (form.qtd < 1) {
+      onToast('❌ Informe uma quantidade válida de diárias.')
+      return
+    }
     if (!tipoSelecionado) return
     start(async () => {
       const res = await registrarMissao({
-        operadorId: form.operadorId,
+        operadorId: operadorSelecionado.id,
         tipoMissaoId: form.tipoMissaoId,
         tipoSnapshot: tipoSelecionado.tipo,
         qtd: form.qtd,
@@ -152,11 +169,10 @@ function FormRegistro({ operadores, tiposMissao, operadorAtualId, onRegistrada, 
         observacao: form.observacao,
       })
       if (res.error) { onToast(`❌ ${res.error}`); return }
-      const op = operadores.find((o) => o.id === form.operadorId)
       onRegistrada({
         id: res.id!,
-        operadorId: form.operadorId,
-        operadorNome: op?.nome ?? '—',
+        operadorId: operadorSelecionado.id,
+        operadorNome: operadorSelecionado.nome ?? '—',
         tipoMissaoId: form.tipoMissaoId,
         tipoSnapshot: tipoSelecionado.tipo,
         qtd: form.qtd,
@@ -318,7 +334,7 @@ function FormRegistro({ operadores, tiposMissao, operadorAtualId, onRegistrada, 
 
         <button
           onClick={salvar}
-          disabled={pending || !form.operadorId || !form.tipoMissaoId}
+          disabled={pending}
           style={{
             width: '100%',
             padding: 14,
@@ -340,25 +356,99 @@ function FormRegistro({ operadores, tiposMissao, operadorAtualId, onRegistrada, 
 
 // ── Card de missão individual ─────────────────────────────────
 
+type MissaoEditPatch = Pick<
+  MissaoRow,
+  'tipoMissaoId' | 'tipoSnapshot' | 'qtd' | 'valorUnitarioSnapshot' | 'valorTotal' | 'observacao'
+>
+
 interface MissaoCardProps {
   missao: MissaoRow
-  onEdited: (id: string, obs: string) => void
+  tiposMissao: TipoMissaoOption[]
+  onEdited: (id: string, patch: MissaoEditPatch) => void
   onDeleted: (id: string) => void
   onToast: (msg: string) => void
 }
 
-function MissaoCard({ missao, onEdited, onDeleted, onToast }: MissaoCardProps) {
+function IconSortToggle({ asc }: { asc: boolean }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 7h10M4 12h14M4 17h8"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity={0.32}
+      />
+      {asc ? (
+        <path
+          d="M19 14l-3-3-3 3"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : (
+        <path
+          d="M13 10l3 3 3-3"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+    </svg>
+  )
+}
+
+function MissaoCard({ missao, tiposMissao, onEdited, onDeleted, onToast }: MissaoCardProps) {
   const [editando, setEditando] = useState(false)
+  const [tipoMissaoIdEdit, setTipoMissaoIdEdit] = useState(missao.tipoMissaoId)
+  const [qtdEdit, setQtdEdit] = useState(missao.qtd)
   const [obsEdit, setObsEdit] = useState(missao.observacao ?? '')
+  const [motivoEdit, setMotivoEdit] = useState('')
   const [pending, start] = useTransition()
 
+  const tipoEditSel = tiposMissao.find((t) => t.id === tipoMissaoIdEdit)
+  const valorPreviewEdit = tipoEditSel ? qtdEdit * tipoEditSel.valor : 0
+
+  function abrirEdicao() {
+    setTipoMissaoIdEdit(missao.tipoMissaoId)
+    setQtdEdit(missao.qtd)
+    setObsEdit(missao.observacao ?? '')
+    setMotivoEdit('')
+    setEditando(true)
+  }
+
   function salvarEdicao() {
+    if (!tipoEditSel) {
+      onToast('❌ Selecione o tipo de diária.')
+      return
+    }
+    if (qtdEdit < 1) {
+      onToast('❌ Quantidade inválida.')
+      return
+    }
     start(async () => {
-      const res = await editarObservacaoMissao(missao.id, obsEdit)
+      const res = await editarMissao({
+        id: missao.id,
+        tipoMissaoId: tipoMissaoIdEdit,
+        tipoSnapshot: tipoEditSel.tipo,
+        qtd: qtdEdit,
+        valorUnitarioSnapshot: tipoEditSel.valor,
+        observacao: obsEdit,
+        motivo: motivoEdit,
+      })
       if (res.error) { onToast(`❌ ${res.error}`); return }
-      onEdited(missao.id, obsEdit.trim())
+      onEdited(missao.id, {
+        tipoMissaoId: tipoMissaoIdEdit,
+        tipoSnapshot: tipoEditSel.tipo,
+        qtd: qtdEdit,
+        valorUnitarioSnapshot: tipoEditSel.valor,
+        valorTotal: valorPreviewEdit,
+        observacao: obsEdit.trim() || null,
+      })
       setEditando(false)
-      onToast('✅ Observação atualizada!')
+      onToast('✅ Missão atualizada!')
     })
   }
 
@@ -391,7 +481,7 @@ function MissaoCard({ missao, onEdited, onDeleted, onToast }: MissaoCardProps) {
           }}
         >
           <div style={{ fontSize: '0.65rem', color: '#1a237e', fontWeight: 800, textTransform: 'uppercase' }}>
-            {missao.qtd}×
+            {editando ? qtdEdit : missao.qtd}×
           </div>
           <div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600, marginTop: 1 }}>
             {fmtData(missao.createdAt)}
@@ -415,20 +505,78 @@ function MissaoCard({ missao, onEdited, onDeleted, onToast }: MissaoCardProps) {
           )}
 
           {editando && (
-            <div style={{ marginTop: 8 }}>
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.6fr', gap: 8, marginBottom: 10 }}>
+                <div>
+                  <span style={{ ...lStyle, marginBottom: 4 }}>Tipo de diária</span>
+                  <select
+                    value={tipoMissaoIdEdit}
+                    onChange={(e) => setTipoMissaoIdEdit(e.target.value)}
+                    style={{ ...mInput, fontSize: '0.82rem' }}
+                  >
+                    {tiposMissao.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.tipo} — {fmtMoeda(t.valor)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <span style={{ ...lStyle, marginBottom: 4 }}>Qtd.</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={qtdEdit}
+                    onChange={(e) => setQtdEdit(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    style={{ ...mInput, fontSize: '0.82rem' }}
+                  />
+                </div>
+              </div>
+              {tipoEditSel && (
+                <div
+                  style={{
+                    background: 'rgba(22,163,74,0.06)',
+                    border: '1px solid rgba(22,163,74,0.18)',
+                    borderRadius: 8,
+                    padding: '8px 10px',
+                    marginBottom: 10,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    color: '#475569',
+                  }}
+                >
+                  <span>
+                    {qtdEdit} × {fmtMoeda(tipoEditSel.valor)}
+                  </span>
+                  <span style={{ color: '#16a34a', fontWeight: 900 }}>{fmtMoeda(valorPreviewEdit)}</span>
+                </div>
+              )}
+              <span style={{ ...lStyle, marginBottom: 4 }}>Observação</span>
               <textarea
                 value={obsEdit}
                 onChange={(e) => setObsEdit(e.target.value)}
                 rows={3}
-                autoFocus
-                style={{ ...mInput, resize: 'vertical', fontSize: '0.82rem', lineHeight: 1.5 }}
+                style={{ ...mInput, resize: 'vertical', fontSize: '0.82rem', lineHeight: 1.5, marginBottom: 10 }}
               />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
+              <span style={{ ...lStyle, marginBottom: 4 }}>Motivo da alteração (opcional, auditoria)</span>
+              <input
+                type="text"
+                value={motivoEdit}
+                onChange={(e) => setMotivoEdit(e.target.value)}
+                placeholder="Ex.: correção de digitação, ajuste solicitado pelo comando..."
+                style={{ ...mInput, fontSize: '0.82rem', marginBottom: 10 }}
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                 <button
+                  type="button"
                   onClick={salvarEdicao}
                   disabled={pending}
                   style={{
-                    padding: '7px 0',
+                    padding: '9px 0',
                     background: pending ? '#94a3b8' : '#16a34a',
                     color: '#fff',
                     border: 'none',
@@ -438,12 +586,19 @@ function MissaoCard({ missao, onEdited, onDeleted, onToast }: MissaoCardProps) {
                     cursor: pending ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {pending ? '⏳...' : '✅ Salvar'}
+                  {pending ? '⏳...' : 'Salvar'}
                 </button>
                 <button
-                  onClick={() => { setEditando(false); setObsEdit(missao.observacao ?? '') }}
+                  type="button"
+                  onClick={() => {
+                    setEditando(false)
+                    setTipoMissaoIdEdit(missao.tipoMissaoId)
+                    setQtdEdit(missao.qtd)
+                    setObsEdit(missao.observacao ?? '')
+                    setMotivoEdit('')
+                  }}
                   style={{
-                    padding: '7px 0',
+                    padding: '9px 0',
                     background: '#f1f5f9',
                     color: '#64748b',
                     border: 'none',
@@ -462,7 +617,8 @@ function MissaoCard({ missao, onEdited, onDeleted, onToast }: MissaoCardProps) {
           {!editando && (
             <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
               <button
-                onClick={() => setEditando(true)}
+                type="button"
+                onClick={abrirEdicao}
                 disabled={pending}
                 style={{
                   padding: '4px 10px',
@@ -475,9 +631,10 @@ function MissaoCard({ missao, onEdited, onDeleted, onToast }: MissaoCardProps) {
                   cursor: 'pointer',
                 }}
               >
-                ✏️ Editar obs.
+                Editar
               </button>
               <button
+                type="button"
                 onClick={handleExcluir}
                 disabled={pending}
                 style={{
@@ -512,16 +669,14 @@ interface OperadorGroup {
 
 interface AccordionProps {
   group: OperadorGroup
-  onEdited: (id: string, obs: string) => void
+  tiposMissao: TipoMissaoOption[]
+  onEdited: (id: string, patch: MissaoEditPatch) => void
   onDeleted: (id: string) => void
   onToast: (msg: string) => void
-  rank: number
 }
 
-function OperadorAccordion({ group, onEdited, onDeleted, onToast, rank }: AccordionProps) {
+function OperadorAccordion({ group, tiposMissao, onEdited, onDeleted, onToast }: AccordionProps) {
   const [open, setOpen] = useState(false)
-
-  const MEDAL = rank === 0 ? '🥇' : rank === 1 ? '🥈' : rank === 2 ? '🥉' : null
 
   return (
     <div
@@ -572,7 +727,6 @@ function OperadorAccordion({ group, onEdited, onDeleted, onToast, rank }: Accord
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {MEDAL && <span style={{ fontSize: '1rem' }}>{MEDAL}</span>}
             <span style={{ fontWeight: 800, fontSize: '0.92rem', color: '#1e293b' }}>
               {group.operadorNome}
             </span>
@@ -614,6 +768,7 @@ function OperadorAccordion({ group, onEdited, onDeleted, onToast, rank }: Accord
               <MissaoCard
                 key={m.id}
                 missao={m}
+                tiposMissao={tiposMissao}
                 onEdited={onEdited}
                 onDeleted={onDeleted}
                 onToast={onToast}
@@ -631,6 +786,7 @@ function OperadorAccordion({ group, onEdited, onDeleted, onToast, rank }: Accord
 export function MissoesClient({ operadores, tiposMissao, missoes: initialMissoes, operadorAtualId }: MissoesClientProps) {
   const [missoes, setMissoes] = useState<MissaoRow[]>(initialMissoes)
   const [toast, setToast] = useState('')
+  const [ordemTotal, setOrdemTotal] = useState<'asc' | 'desc'>('asc')
 
   function showToast(msg: string) {
     setToast(msg)
@@ -641,48 +797,38 @@ export function MissoesClient({ operadores, tiposMissao, missoes: initialMissoes
     setMissoes((prev) => [nova, ...prev])
   }
 
-  function handleEdited(id: string, obs: string) {
-    setMissoes((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, observacao: obs || null } : m))
-    )
+  function handleEdited(id: string, patch: MissaoEditPatch) {
+    setMissoes((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)))
   }
 
   function handleDeleted(id: string) {
     setMissoes((prev) => prev.filter((m) => m.id !== id))
   }
 
-  // Agrupa por operador e ordena pelo total (ranking)
-  const groupMap = new Map<string, OperadorGroup>()
-  for (const m of missoes) {
-    const existing = groupMap.get(m.operadorId)
-    if (existing) {
-      existing.missoes.push(m)
-      existing.totalGeral += m.valorTotal
-    } else {
-      groupMap.set(m.operadorId, {
-        operadorId: m.operadorId,
-        operadorNome: m.operadorNome,
-        missoes: [m],
-        totalGeral: m.valorTotal,
-      })
+  // Ranking: só operadores com ao menos uma missão (evita lista longa de zeros
+  // e confusão quando a ordenação crescente colocaria R$ 0 no topo).
+  const ranking = useMemo(() => {
+    const groupMap = new Map<string, OperadorGroup>()
+    for (const m of missoes) {
+      const existing = groupMap.get(m.operadorId)
+      if (existing) {
+        existing.missoes.push(m)
+        existing.totalGeral += m.valorTotal
+      } else {
+        groupMap.set(m.operadorId, {
+          operadorId: m.operadorId,
+          operadorNome: m.operadorNome,
+          missoes: [m],
+          totalGeral: m.valorTotal,
+        })
+      }
     }
-  }
-
-  // Operadores sem missões ficam no fim do ranking
-  for (const op of operadores) {
-    if (!groupMap.has(op.id)) {
-      groupMap.set(op.id, {
-        operadorId: op.id,
-        operadorNome: op.nome,
-        missoes: [],
-        totalGeral: 0,
-      })
-    }
-  }
-
-  const ranking = [...groupMap.values()].sort((a, b) => b.totalGeral - a.totalGeral)
-
-  const totalGaep = missoes.reduce((s, m) => s + m.valorTotal, 0)
+    const arr = [...groupMap.values()].filter((g) => g.missoes.length > 0)
+    arr.sort((a, b) =>
+      ordemTotal === 'asc' ? a.totalGeral - b.totalGeral : b.totalGeral - a.totalGeral
+    )
+    return arr
+  }, [missoes, ordemTotal])
 
   return (
     <div style={{ paddingBottom: 30 }}>
@@ -700,26 +846,71 @@ export function MissoesClient({ operadores, tiposMissao, missoes: initialMissoes
       <div
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: 12,
-          padding: '0 2px',
+          justifyContent: 'space-between',
+          gap: 12,
+          marginBottom: 14,
+          padding: '2px 0 2px 4px',
         }}
       >
-        <span style={{ fontWeight: 800, fontSize: '0.88rem', color: '#1e293b', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          🏆 Ranking de Diárias
+        <span
+          style={{
+            fontWeight: 800,
+            fontSize: '0.82rem',
+            color: '#0f172a',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}
+        >
+          Ranking de diárias
         </span>
-        <span style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>
-          Total GAEP:{' '}
-          <span style={{ color: '#16a34a', fontWeight: 900 }}>{fmtMoeda(totalGaep)}</span>
-        </span>
+        <button
+          type="button"
+          onClick={() => setOrdemTotal((o) => (o === 'asc' ? 'desc' : 'asc'))}
+          aria-label={
+            ordemTotal === 'asc'
+              ? 'Ordenar ranking do maior total para o menor'
+              : 'Ordenar ranking do menor total para o maior'
+          }
+          title={
+            ordemTotal === 'asc'
+              ? 'Menor total primeiro — clique para inverter'
+              : 'Maior total primeiro — clique para inverter'
+          }
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 12,
+            border: '1px solid #e2e8f0',
+            background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+            color: '#334155',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            boxShadow: '0 1px 2px rgba(15,23,42,0.06)',
+            transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+          }}
+          onMouseDown={(e) => {
+            e.currentTarget.style.transform = 'scale(0.96)'
+          }}
+          onMouseUp={(e) => {
+            e.currentTarget.style.transform = ''
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = ''
+          }}
+        >
+          <IconSortToggle asc={ordemTotal === 'asc'} />
+        </button>
       </div>
 
-      {ranking.map((group, idx) => (
+      {ranking.map((group) => (
         <OperadorAccordion
           key={group.operadorId}
           group={group}
-          rank={idx}
+          tiposMissao={tiposMissao}
           onEdited={handleEdited}
           onDeleted={handleDeleted}
           onToast={showToast}

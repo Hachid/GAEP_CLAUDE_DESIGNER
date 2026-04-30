@@ -361,7 +361,9 @@ export function RelatorioForm({
       {relatorioSalvoId && (
         <div style={{ marginBottom: 16, animation: 'fadeIn .3s' }}>
           <Link
-            href={`/relatorio/${relatorioSalvoId}`}
+            href={`/relatorio/${relatorioSalvoId}?pdf=1`}
+            target="_blank"
+            rel="noopener noreferrer"
             style={{
               display: 'block',
               textAlign: 'center',
@@ -375,7 +377,7 @@ export function RelatorioForm({
               letterSpacing: 0.5,
             }}
           >
-            Ver Relatório Salvo
+            VER RELATÓRIO
           </Link>
         </div>
       )}

@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 
 type ActionResult = { error?: string }
@@ -86,21 +87,111 @@ export async function registrarMissao(input: {
   }
 }
 
-export async function editarObservacaoMissao(
-  id: string,
+type MissaoRowAudit = {
+  id: string
+  gaep_id: string
+  operador_id: string | null
+  tipo_missao_id: string | null
+  tipo_snapshot: string
+  qtd: number
+  valor_unitario_snapshot: number
+  valor_total: number
+  observacao: string | null
+}
+
+/**
+ * Atualiza tipo, quantidade, valores e observação de uma missão do mesmo GAEP do usuário.
+ * Grava linha em `audit_log` (dados_antes / dados_depois) para auditoria.
+ */
+export async function editarMissao(input: {
+  id: string
+  tipoMissaoId: string
+  tipoSnapshot: string
+  qtd: number
+  valorUnitarioSnapshot: number
   observacao: string
-): Promise<ActionResult> {
+  motivo?: string
+}): Promise<ActionResult> {
   try {
-    const { admin } = await getCtx()
-    const { error } = await admin
+    const { admin, operadorId: editorId, gaepId } = await getCtx()
+
+    let ip = 'unknown'
+    try {
+      const headerStore = await headers()
+      ip = headerStore.get('x-forwarded-for') ?? headerStore.get('x-real-ip') ?? 'unknown'
+    } catch {
+      /* testes */
+    }
+
+    if (input.qtd < 1) return { error: 'Quantidade inválida.' }
+
+    const { data: row, error: fetchErr } = await admin
+      .from('missoes')
+      .select(
+        'id, gaep_id, operador_id, tipo_missao_id, tipo_snapshot, qtd, valor_unitario_snapshot, valor_total, observacao'
+      )
+      .eq('id', input.id)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (fetchErr) return { error: fetchErr.message }
+    if (!row) return { error: 'Missão não encontrada.' }
+    const antes = row as MissaoRowAudit
+    if (String(antes.gaep_id) !== gaepId) return { error: 'Sem permissão para editar esta missão.' }
+
+    const valorTotal = input.qtd * input.valorUnitarioSnapshot
+    const obsTrim = input.observacao.trim() || null
+    const motivoTrim = (input.motivo ?? '').trim() || null
+
+    const { error: updErr } = await admin
       .from('missoes')
       .update({
-        observacao: observacao.trim() || null,
+        tipo_missao_id: input.tipoMissaoId,
+        tipo_snapshot: input.tipoSnapshot,
+        qtd: input.qtd,
+        valor_unitario_snapshot: input.valorUnitarioSnapshot,
+        valor_total: valorTotal,
+        observacao: obsTrim,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', id)
+      .eq('id', input.id)
+      .eq('gaep_id', gaepId)
       .is('deleted_at', null)
-    if (error) return { error: error.message }
+
+    if (updErr) return { error: updErr.message }
+
+    const dadosDepois = {
+      tipo_missao_id: input.tipoMissaoId,
+      tipo_snapshot: input.tipoSnapshot,
+      qtd: input.qtd,
+      valor_unitario_snapshot: input.valorUnitarioSnapshot,
+      valor_total: valorTotal,
+      observacao: obsTrim,
+      motivo: motivoTrim,
+    }
+
+    void admin
+      .from('audit_log')
+      .insert({
+        gaep_id: gaepId,
+        operador_id: editorId,
+        acao: 'UPDATE',
+        tabela: 'missoes',
+        registro_id: input.id,
+        dados_antes: {
+          tipo_missao_id: antes.tipo_missao_id,
+          tipo_snapshot: antes.tipo_snapshot,
+          qtd: antes.qtd,
+          valor_unitario_snapshot: Number(antes.valor_unitario_snapshot),
+          valor_total: Number(antes.valor_total),
+          observacao: antes.observacao,
+        },
+        dados_depois: dadosDepois,
+        ip,
+      })
+      .then(() => {})
+      .catch((err: unknown) => console.error('[editarMissao] audit_log:', err))
+
     revalidatePath('/missoes')
     return {}
   } catch (e) {

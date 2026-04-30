@@ -17,10 +17,17 @@ interface OperadorComGaep {
 
 interface Props {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ pdf?: string | string[] }>
 }
 
-export default async function RelatorioDetalhePage({ params }: Props) {
+export default async function RelatorioDetalhePage({ params, searchParams }: Props) {
   const { id } = await params
+  const sp = await searchParams
+  const pdfFlag = sp.pdf
+  const autoPrintPdf =
+    pdfFlag === '1' ||
+    pdfFlag === 'true' ||
+    (Array.isArray(pdfFlag) && (pdfFlag.includes('1') || pdfFlag.includes('true')))
 
   const supabase = await createClient()
   const {
@@ -63,7 +70,7 @@ export default async function RelatorioDetalhePage({ params }: Props) {
 
   const { data: relatorioCfg } = await admin
     .from('config_relatorio')
-    .select('titulo_texto, descricao_texto, rodape_texto, titulo_estilo, descricao_estilo, rodape_estilo')
+    .select('titulo_texto, subtitulo_texto, descricao_texto, rodape_texto, titulo_estilo, subtitulo_estilo, descricao_estilo, rodape_estilo, timbrado_url')
     .eq('gaep_id', operadorAtual.gaep_id)
     .maybeSingle()
 
@@ -71,22 +78,35 @@ export default async function RelatorioDetalhePage({ params }: Props) {
     ? {
         id: null,
         tituloTexto: String(relatorioCfg.titulo_texto ?? 'RELATÓRIO OPERACIONAL'),
+        subtituloTexto: String(relatorioCfg.subtitulo_texto ?? 'RELATÓRIO DE ATIVIDADE(S)'),
         descricaoTexto: String(relatorioCfg.descricao_texto ?? ''),
         rodapeTexto: String(relatorioCfg.rodape_texto ?? '{{GAEP}}'),
+        timbradoUrl: relatorioCfg.timbrado_url ? String(relatorioCfg.timbrado_url) : null,
         tituloEstilo: {
           fontFamily: 'Times New Roman',
           fontColor: '#000000',
           align: 'center',
           indent: 0,
           lineHeight: 1.4,
+          fontSize: 12,
           ...(relatorioCfg.titulo_estilo as Record<string, unknown>),
         } as ConfigRelatorioUIData['tituloEstilo'],
+        subtituloEstilo: {
+          fontFamily: 'Times New Roman',
+          fontColor: '#000000',
+          align: 'center',
+          indent: 0,
+          lineHeight: 1.3,
+          fontSize: 11,
+          ...(relatorioCfg.subtitulo_estilo as Record<string, unknown>),
+        } as ConfigRelatorioUIData['subtituloEstilo'],
         descricaoEstilo: {
           fontFamily: 'Times New Roman',
           fontColor: '#111827',
           align: 'justify',
           indent: 12,
           lineHeight: 1.8,
+          fontSize: 11,
           ...(relatorioCfg.descricao_estilo as Record<string, unknown>),
         } as ConfigRelatorioUIData['descricaoEstilo'],
         rodapeEstilo: {
@@ -95,20 +115,32 @@ export default async function RelatorioDetalhePage({ params }: Props) {
           align: 'right',
           indent: 0,
           lineHeight: 1.3,
+          fontSize: 8,
           ...(relatorioCfg.rodape_estilo as Record<string, unknown>),
         } as ConfigRelatorioUIData['rodapeEstilo'],
       }
     : {
         id: null,
         tituloTexto: 'RELATÓRIO OPERACIONAL',
+        subtituloTexto: 'RELATÓRIO DE ATIVIDADE(S)',
         descricaoTexto: '',
         rodapeTexto: '{{GAEP}}',
+        timbradoUrl: null,
         tituloEstilo: {
           fontFamily: 'Times New Roman',
           fontColor: '#000000',
           align: 'center',
           indent: 0,
           lineHeight: 1.4,
+          fontSize: 12,
+        },
+        subtituloEstilo: {
+          fontFamily: 'Times New Roman',
+          fontColor: '#000000',
+          align: 'center',
+          indent: 0,
+          lineHeight: 1.3,
+          fontSize: 11,
         },
         descricaoEstilo: {
           fontFamily: 'Times New Roman',
@@ -116,6 +148,7 @@ export default async function RelatorioDetalhePage({ params }: Props) {
           align: 'justify',
           indent: 12,
           lineHeight: 1.8,
+          fontSize: 11,
         },
         rodapeEstilo: {
           fontFamily: 'Times New Roman',
@@ -123,6 +156,7 @@ export default async function RelatorioDetalhePage({ params }: Props) {
           align: 'right',
           indent: 0,
           lineHeight: 1.3,
+          fontSize: 8,
         },
       }
 
@@ -141,6 +175,7 @@ export default async function RelatorioDetalhePage({ params }: Props) {
             operadorId={operadorAtual.id}
             gaepCodigo={operadorAtual.gaeps.nome}
             configRelatorio={configRelatorio}
+            autoPrintPdf={autoPrintPdf}
           />
         </div>
       </main>
