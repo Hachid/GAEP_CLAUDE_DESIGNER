@@ -68,11 +68,19 @@ export default async function RelatorioDetalhePage({ params, searchParams }: Pro
 
   if (error || !relatorio) notFound()
 
-  const { data: relatorioCfg } = await admin
+  const withLayout = await admin
     .from('config_relatorio')
-    .select('titulo_texto, subtitulo_texto, descricao_texto, rodape_texto, titulo_estilo, subtitulo_estilo, descricao_estilo, rodape_estilo, timbrado_url')
+    .select('titulo_texto, subtitulo_texto, descricao_texto, rodape_texto, titulo_estilo, subtitulo_estilo, descricao_estilo, rodape_estilo, timbrado_url, layout_pdf')
     .eq('gaep_id', operadorAtual.gaep_id)
     .maybeSingle()
+  const fallbackCfg = withLayout.error
+    ? await admin
+        .from('config_relatorio')
+        .select('titulo_texto, subtitulo_texto, descricao_texto, rodape_texto, titulo_estilo, subtitulo_estilo, descricao_estilo, rodape_estilo, timbrado_url')
+        .eq('gaep_id', operadorAtual.gaep_id)
+        .maybeSingle()
+    : null
+  const relatorioCfg = (withLayout.error ? fallbackCfg?.data : withLayout.data) as Record<string, unknown> | null
 
   const configRelatorio: ConfigRelatorioUIData = relatorioCfg
     ? {
@@ -118,6 +126,18 @@ export default async function RelatorioDetalhePage({ params, searchParams }: Pro
           fontSize: 8,
           ...(relatorioCfg.rodape_estilo as Record<string, unknown>),
         } as ConfigRelatorioUIData['rodapeEstilo'],
+        printMargins: (() => {
+          const layout = relatorioCfg.layout_pdf as
+            | { margins?: { top?: number; right?: number; bottom?: number; left?: number } }
+            | undefined
+          const m = layout?.margins
+          return {
+            top: Number(m?.top ?? 1.5),
+            right: Number(m?.right ?? 1.5),
+            bottom: Number(m?.bottom ?? 1.5),
+            left: Number(m?.left ?? 1.5),
+          }
+        })(),
       }
     : {
         id: null,
@@ -158,6 +178,7 @@ export default async function RelatorioDetalhePage({ params, searchParams }: Pro
           lineHeight: 1.3,
           fontSize: 8,
         },
+        printMargins: { top: 1.5, right: 1.5, bottom: 1.5, left: 1.5 },
       }
 
   return (

@@ -12,9 +12,10 @@ interface Operador {
 
 interface LoginFormProps {
   operadores: Operador[]
+  carregamentoComErro?: boolean
 }
 
-export function LoginForm({ operadores }: LoginFormProps) {
+export function LoginForm({ operadores, carregamentoComErro = false }: LoginFormProps) {
   const [state, formAction, isPending] = useActionState<LoginState, FormData>(
     loginAction,
     null
@@ -118,6 +119,18 @@ export function LoginForm({ operadores }: LoginFormProps) {
                 </option>
               ))}
             </select>
+            {carregamentoComErro && operadores.length === 0 && (
+              <p
+                role="alert"
+                style={{
+                  margin: '8px 0 0 0',
+                  fontSize: '0.8rem',
+                  color: '#b91c1c',
+                }}
+              >
+                Falha temporária ao carregar operadores. Atualize a página em alguns segundos.
+              </p>
+            )}
           </div>
 
           <div>

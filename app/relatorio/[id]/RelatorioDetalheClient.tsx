@@ -83,6 +83,11 @@ export function RelatorioDetalheClient({
     paddingLeft: `${configRelatorio.tituloEstilo.indent}px`,
     lineHeight: configRelatorio.tituloEstilo.lineHeight,
     fontSize: `${configRelatorio.tituloEstilo.fontSize ?? 12}pt`,
+    fontWeight: configRelatorio.tituloEstilo.bold === false ? 'normal' : 'bold',
+    fontStyle: configRelatorio.tituloEstilo.italic ? 'italic' : 'normal',
+    textDecoration: configRelatorio.tituloEstilo.underline ? 'underline' : 'none',
+    marginTop: configRelatorio.tituloEstilo.marginTop ? `${configRelatorio.tituloEstilo.marginTop}mm` : undefined,
+    marginBottom: configRelatorio.tituloEstilo.marginBottom !== undefined ? `${configRelatorio.tituloEstilo.marginBottom}mm` : undefined,
   }
   const subtituloPrintStyle: React.CSSProperties = {
     fontFamily: configRelatorio.subtituloEstilo.fontFamily,
@@ -91,6 +96,11 @@ export function RelatorioDetalheClient({
     paddingLeft: `${configRelatorio.subtituloEstilo.indent}px`,
     lineHeight: configRelatorio.subtituloEstilo.lineHeight,
     fontSize: `${configRelatorio.subtituloEstilo.fontSize ?? 11}pt`,
+    fontWeight: configRelatorio.subtituloEstilo.bold ? 'bold' : 'normal',
+    fontStyle: configRelatorio.subtituloEstilo.italic ? 'italic' : 'normal',
+    textDecoration: configRelatorio.subtituloEstilo.underline ? 'underline' : 'none',
+    marginTop: configRelatorio.subtituloEstilo.marginTop ? `${configRelatorio.subtituloEstilo.marginTop}mm` : undefined,
+    marginBottom: configRelatorio.subtituloEstilo.marginBottom !== undefined ? `${configRelatorio.subtituloEstilo.marginBottom}mm` : undefined,
   }
   const descricaoPrintStyle: React.CSSProperties = {
     fontFamily: configRelatorio.descricaoEstilo.fontFamily,
@@ -99,6 +109,11 @@ export function RelatorioDetalheClient({
     paddingLeft: `${configRelatorio.descricaoEstilo.indent}px`,
     lineHeight: configRelatorio.descricaoEstilo.lineHeight,
     fontSize: `${configRelatorio.descricaoEstilo.fontSize ?? 11}pt`,
+    fontWeight: configRelatorio.descricaoEstilo.bold ? 'bold' : 'normal',
+    fontStyle: configRelatorio.descricaoEstilo.italic ? 'italic' : 'normal',
+    textDecoration: configRelatorio.descricaoEstilo.underline ? 'underline' : 'none',
+    marginTop: configRelatorio.descricaoEstilo.marginTop ? `${configRelatorio.descricaoEstilo.marginTop}mm` : undefined,
+    marginBottom: configRelatorio.descricaoEstilo.marginBottom !== undefined ? `${configRelatorio.descricaoEstilo.marginBottom}mm` : undefined,
   }
   const rodapePrintStyle: React.CSSProperties = {
     fontFamily: configRelatorio.rodapeEstilo.fontFamily,
@@ -107,6 +122,10 @@ export function RelatorioDetalheClient({
     paddingLeft: `${configRelatorio.rodapeEstilo.indent}px`,
     lineHeight: configRelatorio.rodapeEstilo.lineHeight,
     fontSize: `${configRelatorio.rodapeEstilo.fontSize ?? 8}pt`,
+    fontWeight: configRelatorio.rodapeEstilo.bold ? 'bold' : 'normal',
+    fontStyle: configRelatorio.rodapeEstilo.italic ? 'italic' : 'normal',
+    textDecoration: configRelatorio.rodapeEstilo.underline ? 'underline' : 'none',
+    marginTop: configRelatorio.rodapeEstilo.marginTop ? `${configRelatorio.rodapeEstilo.marginTop}mm` : undefined,
   }
 
   const legendaStr = [
@@ -335,14 +354,20 @@ export function RelatorioDetalheClient({
       ══════════════════════════════════════════ */}
       <div
         className="print-page"
-        style={configRelatorio.timbradoUrl ? {
-          backgroundImage: `url(${configRelatorio.timbradoUrl})`,
-          backgroundSize: '100% 100%',
-          backgroundRepeat: 'no-repeat',
-        } : undefined}
       >
-        <div className="print-page-content">
-
+        <div
+          className="print-page-bg"
+          style={configRelatorio.timbradoUrl ? { backgroundImage: `url(${configRelatorio.timbradoUrl})` } : undefined}
+        />
+        <div
+          className="print-page-content"
+          style={{
+            top: `${configRelatorio.printMargins.top}mm`,
+            right: `${configRelatorio.printMargins.right}mm`,
+            bottom: `${configRelatorio.printMargins.bottom}mm`,
+            left: `${configRelatorio.printMargins.left}mm`,
+          }}
+        >
           {/* Título — nome da organização (multi-linha) */}
           <div style={{ ...tituloPrintStyle, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '2mm', whiteSpace: 'pre-line' }}>
             {configRelatorio.tituloTexto || 'RELATÓRIO OPERACIONAL'}

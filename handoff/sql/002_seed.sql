@@ -15,25 +15,25 @@ INSERT INTO categorias_atividade (id, nome) VALUES
   ('10000000-0000-0000-0000-000000000002', 'TREINAR'),
   ('10000000-0000-0000-0000-000000000003', 'INSTRUIR');
 
--- Atividades (universais — disponíveis para qualquer categoria)
+-- Atividades (universais — catálogo oficial GAEP)
 INSERT INTO atividades (nome) VALUES
-  ('Escolta'),
-  ('Algemamento'),
-  ('Patrulhamento'),
   ('Abordagem'),
-  ('CQB'),
-  ('Luta Policial'),
-  ('Armamento e Tiro'),
-  ('Drone'),
-  ('Intervenção'),
-  ('TTML'),
   ('Administrativo'),
-  ('Segurança de Autoridades'),
-  ('PDU'),
-  ('Outros'),
-  ('Atividade Física'),
+  ('Algemamento'),
   ('Apoio a Unidade'),
-  ('Rádio Comunicação');
+  ('Armamento e Tiro'),
+  ('Atividade Física'),
+  ('CQB'),
+  ('Drone'),
+  ('Escolta'),
+  ('Intervenção'),
+  ('Luta Policial'),
+  ('Outros'),
+  ('Patrulhamento'),
+  ('PDU'),
+  ('Rádio Comunicação'),
+  ('Segurança de Autoridades'),
+  ('TTML');
 
 -- Tipos de Missão
 INSERT INTO tipos_missao (tipo, locais, valor, vigencia) VALUES

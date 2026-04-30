@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient, type CookieMethodsServer } from '@supabase/ssr'
+import { supabaseCookieOptions } from '@/lib/supabase/cookie-options'
 
 const PUBLIC_PATHS = ['/login']
 
@@ -7,6 +8,12 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+    return NextResponse.next()
+  }
+
+  // Server Actions already validate auth in the action itself.
+  // Skipping middleware auth here avoids hanging POSTs when auth fetch is unstable.
+  if (request.method === 'POST' && request.headers.has('next-action')) {
     return NextResponse.next()
   }
 
@@ -26,7 +33,7 @@ export async function middleware(request: NextRequest) {
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: cookieMethods }
+    { cookies: cookieMethods, cookieOptions: supabaseCookieOptions }
   )
 
   const { data: { user } } = await supabase.auth.getUser()

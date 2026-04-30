@@ -5,12 +5,12 @@ BEGIN;
 
 ALTER TABLE public.missoes
   ADD COLUMN IF NOT EXISTS tipo_snapshot text,
-  ADD COLUMN IF NOT EXISTS qtd integer,
+  ADD COLUMN IF NOT EXISTS qtd numeric(10,2),
   ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES public.operadores(id),
   ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
 UPDATE public.missoes
-SET qtd = GREATEST(1, COALESCE(qtd_diarias, 1)::int)
+SET qtd = GREATEST(0.01, COALESCE(qtd_diarias, 1)::numeric)
 WHERE qtd IS NULL;
 
 UPDATE public.missoes
@@ -25,7 +25,7 @@ WHERE created_by IS NULL;
 
 ALTER TABLE public.missoes
   ALTER COLUMN qtd SET NOT NULL,
-  ALTER COLUMN qtd SET DEFAULT 1,
+  ALTER COLUMN qtd SET DEFAULT 1.00,
   ALTER COLUMN tipo_snapshot SET NOT NULL;
 
 ALTER TABLE public.missoes
@@ -43,7 +43,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  NEW.qtd := COALESCE(NEW.qtd, NEW.qtd_diarias::int, 1);
+  NEW.qtd := COALESCE(NEW.qtd, NEW.qtd_diarias::numeric, 1.00);
   NEW.qtd_diarias := COALESCE(NEW.qtd_diarias, NEW.qtd::numeric, 1);
   NEW.created_by := COALESCE(NEW.created_by, NEW.registrado_por_id);
   NEW.registrado_por_id := COALESCE(NEW.registrado_por_id, NEW.created_by);

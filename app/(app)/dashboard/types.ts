@@ -21,11 +21,20 @@ export type EvolucaoMes = {
   registros: number
 }
 
+export type OperadorStat = {
+  id: string
+  nome: string
+  numerica: string | null
+  totalRegistros: number
+  totalMinutos: number
+}
+
 export type KPIData = {
   totalRegistros: number
   totalMinutos: number
   porCategoria: CategoriaStat[]
   rankingAtividades: AtividadeStat[]
+  rankingOperadores: OperadorStat[]
 }
 
 export type DashboardFiltros = {

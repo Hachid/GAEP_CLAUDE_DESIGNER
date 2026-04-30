@@ -60,6 +60,9 @@ export async function registrarMissao(input: {
 }): Promise<{ id?: string; error?: string }> {
   try {
     const { admin, operadorId: createdBy, gaepId } = await getCtx()
+    if (!Number.isFinite(input.qtd) || input.qtd <= 0) {
+      return { error: 'Quantidade inválida.' }
+    }
 
     const valorTotal = input.qtd * input.valorUnitarioSnapshot
 
@@ -123,7 +126,7 @@ export async function editarMissao(input: {
       /* testes */
     }
 
-    if (input.qtd < 1) return { error: 'Quantidade inválida.' }
+    if (!Number.isFinite(input.qtd) || input.qtd <= 0) return { error: 'Quantidade inválida.' }
 
     const { data: row, error: fetchErr } = await admin
       .from('missoes')

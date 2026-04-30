@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import dynamic from 'next/dynamic'
 import { FiltrosDash } from '@/components/dashboard/FiltrosDash'
 import { KPIGrid } from '@/components/dashboard/KPIGrid'
+import { RankingOperadores } from '@/components/dashboard/RankingOperadores'
 import { refreshKPIData } from './actions'
 import type { KPIData, DashboardFiltros, EvolucaoMes } from './types'
 
@@ -111,6 +112,8 @@ export function DashboardClient({
       <div style={cardStyle}>
         <RankingBars data={kpi.rankingAtividades} />
       </div>
+
+      <RankingOperadores data={kpi.rankingOperadores} />
 
       <EvolucaoLinhas evolucao={evolucaoInicial} />
     </div>

@@ -111,6 +111,7 @@ export async function fetchDesempenhoData(
       totalMinutos,
       porCategoria: [...catMap.values()].sort((a, b) => b.totalMinutos - a.totalMinutos),
       rankingAtividades: [...atMap.values()].sort((a, b) => b.totalMinutos - a.totalMinutos),
+      rankingOperadores: [],
     }
 
     const folha: FolhaDia[] = [...diaMap.entries()]

@@ -61,15 +61,17 @@ export default async function HistoricoPage() {
 
   if (!operadorAtual?.gaeps) redirect('/relatorio')
 
-  const [historicoRes, catsRes, atvsRes] = await Promise.all([
+  const [historicoRes, catsRes, atvsRes, opsRes] = await Promise.all([
     buscarHistoricoRelatorios(operadorAtual.gaeps.id),
     admin.from('categorias_atividade').select('id, nome').order('nome'),
     admin.from('atividades').select('id, nome').is('deleted_at', null).order('nome'),
+    admin.from('operadores').select('id, nome').eq('gaep_id', operadorAtual.gaep_id).is('deleted_at', null).order('nome'),
   ])
 
   const relatorios = historicoRes.data ?? []
   const categorias = (catsRes.data ?? []) as CategoriaRow[]
   const atividades = (atvsRes.data ?? []) as AtividadeRow[]
+  const operadores = (opsRes.data ?? []) as { id: string; nome: string }[]
 
   return (
     <>
@@ -84,6 +86,7 @@ export default async function HistoricoPage() {
             relatorios={relatorios}
             categorias={categorias}
             atividades={atividades}
+            operadores={operadores}
             perfil={operadorAtual.perfil ?? 'OPERADOR'}
             operadorId={operadorAtual.id}
           />

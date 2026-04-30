@@ -10,8 +10,9 @@ import type { MissaoRow, OperadorOption, TipoMissaoOption } from './MissoesClien
 interface OperadorComGaep {
   id: string
   nome_guerra: string
+  numerica: string | null
+  matricula?: string
   gaep_id: string
-  matricula: string
   perfil: string
   gaeps: { id: string; nome: string } | null
 }
@@ -27,27 +28,91 @@ export default async function MissoesPage() {
 
   const admin = createAdminClient()
 
+  async function buscarOperadorAtualPorAuthId(authId: string) {
+    const withNumerica = await admin
+      .from('operadores')
+      .select('id, nome_guerra:nome, numerica, gaep_id, matricula, perfil, gaeps(id, nome:codigo)')
+      .eq('auth_id', authId)
+      .is('deleted_at', null)
+      .maybeSingle<OperadorComGaep>()
+
+    if (!withNumerica.error) return withNumerica.data
+
+    const fallback = await admin
+      .from('operadores')
+      .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, nome:codigo)')
+      .eq('auth_id', authId)
+      .is('deleted_at', null)
+      .maybeSingle<Omit<OperadorComGaep, 'numerica'>>()
+
+    if (!fallback.data) return null
+    return { ...fallback.data, numerica: null }
+  }
+
+  async function buscarOperadorAtualPorMatricula(matricula: string) {
+    const withNumerica = await admin
+      .from('operadores')
+      .select('id, nome_guerra:nome, numerica, gaep_id, matricula, perfil, gaeps(id, nome:codigo)')
+      .eq('matricula', matricula)
+      .is('deleted_at', null)
+      .maybeSingle<OperadorComGaep>()
+
+    if (!withNumerica.error) return withNumerica.data
+
+    const fallback = await admin
+      .from('operadores')
+      .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, nome:codigo)')
+      .eq('matricula', matricula)
+      .is('deleted_at', null)
+      .maybeSingle<Omit<OperadorComGaep, 'numerica'>>()
+
+    if (!fallback.data) return null
+    return { ...fallback.data, numerica: null }
+  }
+
+  async function listarOperadoresGaep(gaepId: string) {
+    const withNumerica = await admin
+      .from('operadores')
+      .select('id, nome_guerra:nome, numerica, matricula')
+      .eq('gaep_id', gaepId)
+      .is('deleted_at', null)
+      .eq('ativo', true)
+      .order('nome')
+
+    if (!withNumerica.error) {
+      return (withNumerica.data ?? []) as Array<{
+        id: string
+        nome_guerra: string
+        numerica: string | null
+        matricula: string | null
+      }>
+    }
+
+    const fallback = await admin
+      .from('operadores')
+      .select('id, nome_guerra:nome, matricula')
+      .eq('gaep_id', gaepId)
+      .is('deleted_at', null)
+      .eq('ativo', true)
+      .order('nome')
+
+    return ((fallback.data ?? []) as Array<{ id: string; nome_guerra: string; matricula: string | null }>).map((o) => ({
+      ...o,
+      numerica: null,
+    }))
+  }
+
   // ── 2. Lookup operador ────────────────────────────────────────
   let operadorAtual: OperadorComGaep | null = null
 
-  const { data: byAuthId } = await admin
-    .from('operadores')
-    .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, nome:codigo)')
-    .eq('auth_id', user.id)
-    .is('deleted_at', null)
-    .maybeSingle<OperadorComGaep>()
+  const byAuthId = await buscarOperadorAtualPorAuthId(user.id)
 
   if (byAuthId) {
     operadorAtual = byAuthId
   } else {
     const matricula = user.email?.replace('@gaep.internal', '').trim() ?? ''
     if (matricula) {
-      const { data: byMat } = await admin
-        .from('operadores')
-        .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, nome:codigo)')
-        .eq('matricula', matricula)
-        .is('deleted_at', null)
-        .maybeSingle<OperadorComGaep>()
+      const byMat = await buscarOperadorAtualPorMatricula(matricula)
       if (byMat) {
         operadorAtual = byMat
         admin.from('operadores').update({ auth_id: user.id }).eq('id', byMat.id).then(() => {})
@@ -60,15 +125,8 @@ export default async function MissoesPage() {
   if (!gaep) redirect('/relatorio')
 
   // ── 3. Dados em paralelo ──────────────────────────────────────
-  const [opRes, tiposRes, missoesRes] = await Promise.all([
-    admin
-      .from('operadores')
-      .select('id, nome_guerra:nome')
-      .eq('gaep_id', gaep.id)
-      .is('deleted_at', null)
-      .eq('ativo', true)
-      .order('nome'),
-
+  const [opsData, tiposRes, missoesRes] = await Promise.all([
+    listarOperadoresGaep(gaep.id),
     admin
       .from('tipos_missao')
       .select('id, tipo, valor')
@@ -87,9 +145,10 @@ export default async function MissoesPage() {
   ])
 
   // ── 4. Montar props ───────────────────────────────────────────
-  const operadores: OperadorOption[] = ((opRes.data ?? []) as Array<{ id: string; nome_guerra: string }>).map((o) => ({
+  const operadores: OperadorOption[] = opsData.map((o) => ({
     id: o.id,
     nome: o.nome_guerra,
+    numerica: o.numerica ?? null,
   }))
 
   const tiposMissao: TipoMissaoOption[] = ((tiposRes.data ?? []) as Array<{ id: string; tipo: string; valor: number }>).map((t) => ({
@@ -117,7 +176,7 @@ export default async function MissoesPage() {
     operadorNome: m.operadores?.nome_guerra ?? '—',
     tipoMissaoId: m.tipo_missao_id,
     tipoSnapshot: m.tipo_snapshot,
-    qtd: m.qtd,
+    qtd: Number(m.qtd),
     valorUnitarioSnapshot: Number(m.valor_unitario_snapshot),
     valorTotal: Number(m.valor_total),
     observacao: m.observacao,

@@ -189,6 +189,8 @@ export interface RelatorioResumo {
   atividade_nome: string | null
   versao: number
   created_at: string
+  relatorista_id: string | null
+  relatorista_nome: string | null
 }
 
 /** Busca os detalhes completos de um relatório pelo ID. */
@@ -316,7 +318,7 @@ export async function buscarHistoricoRelatorios(
 
   const { data: rows, error: rowsErr } = await admin
     .from('relatorios')
-    .select('id, data, hora_inicio, hora_fim, horas_totais, categoria_id, atividade_id, versao, created_at')
+    .select('id, data, hora_inicio, hora_fim, horas_totais, categoria_id, atividade_id, relatorista_id, versao, created_at')
     .eq('gaep_id', gaepId)
     .is('deleted_at', null)
     .order('data', { ascending: false })
@@ -326,16 +328,20 @@ export async function buscarHistoricoRelatorios(
 
   const relRows = ((rows ?? []) as Array<Record<string, unknown>>)
 
-  // Busca todos os nomes de categoria e atividade em batch
+  // Busca todos os nomes em batch
   const catIds = [...new Set(relRows.map((r) => r.categoria_id as string).filter(Boolean))]
   const atvIds = [...new Set(relRows.map((r) => r.atividade_id as string).filter(Boolean))]
+  const relIds = [...new Set(relRows.map((r) => r.relatorista_id as string).filter(Boolean))]
 
-  const [catsRes, atvsRes] = await Promise.all([
+  const [catsRes, atvsRes, relNamesRes] = await Promise.all([
     catIds.length > 0
       ? admin.from('categorias_atividade').select('id, nome').in('id', catIds)
       : Promise.resolve({ data: [] }),
     atvIds.length > 0
       ? admin.from('atividades').select('id, nome').in('id', atvIds)
+      : Promise.resolve({ data: [] }),
+    relIds.length > 0
+      ? admin.from('operadores').select('id, nome').in('id', relIds)
       : Promise.resolve({ data: [] }),
   ])
 
@@ -344,6 +350,9 @@ export async function buscarHistoricoRelatorios(
   )
   const atvMap = Object.fromEntries(
     ((atvsRes.data ?? []) as Array<{ id: string; nome: string }>).map((a) => [a.id, a.nome])
+  )
+  const relMap = Object.fromEntries(
+    ((relNamesRes.data ?? []) as Array<{ id: string; nome: string }>).map((o) => [o.id, o.nome])
   )
 
   const data: RelatorioResumo[] = relRows.map((r) => ({
@@ -358,6 +367,8 @@ export async function buscarHistoricoRelatorios(
     atividade_nome: r.atividade_id ? (atvMap[r.atividade_id as string] ?? null) : null,
     versao: r.versao as number,
     created_at: r.created_at as string,
+    relatorista_id: (r.relatorista_id as string) ?? null,
+    relatorista_nome: r.relatorista_id ? (relMap[r.relatorista_id as string] ?? null) : null,
   }))
 
   return { data }

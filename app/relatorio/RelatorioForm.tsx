@@ -25,6 +25,114 @@ interface Atividade {
   nome: string
 }
 
+function PreviewResumo({
+  onClose, operadorNome, data, horaInicio, horaFim, horas,
+  categoriaNome, atividadeNome, equipeNomes, descricao, descricaoRevisada,
+}: {
+  onClose: () => void
+  operadorNome: string
+  data: string
+  horaInicio: string
+  horaFim: string
+  horas: number
+  categoriaNome: string
+  atividadeNome: string
+  equipeNomes: string[]
+  descricao: string
+  descricaoRevisada: string | null
+}) {
+  const CAT_COLORS: Record<string, string> = { OPERAR: '#1a237e', TREINAR: '#f97316', INSTRUIR: '#16a34a' }
+  const catColor = CAT_COLORS[categoriaNome] ?? '#64748b'
+  const texto = descricaoRevisada || descricao
+  const dataFmt = data
+    ? new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+    : '—'
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.65)', zIndex: 1000, display: 'flex', alignItems: 'flex-end' }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxHeight: '88vh', overflowY: 'auto', padding: '20px 16px 32px', boxShadow: '0 -8px 40px rgba(0,0,0,0.2)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Drag handle */}
+        <div style={{ width: 40, height: 4, background: '#e2e8f0', borderRadius: 2, margin: '0 auto 18px' }} />
+
+        <div style={{ fontWeight: 800, fontSize: '1rem', color: '#1a237e', textAlign: 'center', marginBottom: 18 }}>
+          Resumo do Relatório
+        </div>
+
+        {/* Relatorista */}
+        <div style={{ background: 'rgba(26,35,126,0.06)', borderLeft: '3px solid #1a237e', padding: '8px 12px', borderRadius: 6, marginBottom: 14, fontSize: '0.88rem', fontWeight: 700, color: '#1a237e' }}>
+          {operadorNome}
+        </div>
+
+        {/* Data/hora */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', fontWeight: 700, color: '#64748b', letterSpacing: 0.5, marginBottom: 4 }}>Data e Horário</div>
+          <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.9rem', textTransform: 'capitalize' }}>{dataFmt}</div>
+          <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: 3 }}>
+            {horaInicio && horaFim ? `${horaInicio} às ${horaFim}` : 'Horário não informado'}
+            {horas > 0 ? ` · ${horas}h` : ''}
+          </div>
+        </div>
+
+        {/* Categoria + Atividade */}
+        {(categoriaNome || atividadeNome) && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', fontWeight: 700, color: '#64748b', letterSpacing: 0.5, marginBottom: 6 }}>Operação</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {categoriaNome && (
+                <span style={{ background: `${catColor}18`, color: catColor, border: `1px solid ${catColor}40`, borderRadius: 20, padding: '4px 12px', fontSize: '0.75rem', fontWeight: 700 }}>
+                  {categoriaNome}
+                </span>
+              )}
+              {atividadeNome && (
+                <span style={{ background: '#f8fafc', color: '#334155', border: '1px solid #e2e8f0', borderRadius: 20, padding: '4px 12px', fontSize: '0.75rem', fontWeight: 600 }}>
+                  {atividadeNome}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Equipe */}
+        {equipeNomes.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', fontWeight: 700, color: '#64748b', letterSpacing: 0.5, marginBottom: 6 }}>Equipe ({equipeNomes.length})</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {equipeNomes.map((n) => (
+                <span key={n} style={{ background: '#f1f5f9', color: '#334155', borderRadius: 20, padding: '4px 10px', fontSize: '0.75rem', fontWeight: 600 }}>{n}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Descrição */}
+        {texto && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', fontWeight: 700, color: '#64748b', letterSpacing: 0.5, marginBottom: 6 }}>
+              Descrição{descricaoRevisada ? ' · revisada pela IA' : ''}
+            </div>
+            <div style={{ fontSize: '0.85rem', color: '#334155', lineHeight: 1.7, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, maxHeight: 180, overflowY: 'auto' }}>
+              {texto}
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={onClose}
+          style={{ width: '100%', padding: 14, background: '#1a237e', color: '#fff', border: 'none', borderRadius: 12, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}
+        >
+          Fechar
+        </button>
+      </div>
+    </div>
+  )
+}
+
 interface RelatorioFormProps {
   operadorAtual: Operador
   gaepId: string
@@ -95,8 +203,8 @@ export function RelatorioForm({
 }: RelatorioFormProps) {
   // ── Estado do formulário ──────────────────────────────────────
   const [data, setData] = useState('')
-  const [horaInicio, setHoraInicio] = useState('')
-  const [horaFim, setHoraFim] = useState('')
+  const [horaInicio, setHoraInicio] = useState('08:00')
+  const [horaFim, setHoraFim] = useState('15:00')
   const [categoriaId, setCategoriaId] = useState('')
   const [atividadeId, setAtividadeId] = useState('')
   const [outrosIntegrantes, setOutrosIntegrantes] = useState('')
@@ -110,6 +218,7 @@ export function RelatorioForm({
   const [descricaoRevisada, setDescricaoRevisada] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [relatorioSalvoId, setRelatorioSalvoId] = useState<string | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
 
   useEffect(() => {
     if (!data) {
@@ -258,6 +367,8 @@ export function RelatorioForm({
       {/* Data + Horários */}
       <DateTimeBlock
         date={data}
+        startTime={horaInicio}
+        endTime={horaFim}
         onDateChange={setData}
         onStartChange={setHoraInicio}
         onEndChange={setHoraFim}
@@ -329,6 +440,22 @@ export function RelatorioForm({
       {/* Descrição + Mic */}
       <DescricaoMic value={descricao} onChange={setDescricao} />
 
+      {/* Preview antes de salvar */}
+      {descricao.trim() && (
+        <button
+          type="button"
+          onClick={() => setShowPreview(true)}
+          style={{
+            width: '100%', padding: '11px', background: 'rgba(26,35,126,0.05)',
+            color: '#1a237e', border: '1px solid rgba(26,35,126,0.2)', borderRadius: 10,
+            fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', marginBottom: 10,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}
+        >
+          👁 Ver resumo antes de salvar
+        </button>
+      )}
+
       {/* Botões */}
       <BotoesAcao
         onSalvarDireto={handleSalvarDireto}
@@ -388,6 +515,23 @@ export function RelatorioForm({
           descricaoRevisada={descricaoRevisada}
           onSalvar={handleSalvarConsolidado}
           salvando={salvando}
+        />
+      )}
+
+      {/* Preview bottom sheet */}
+      {showPreview && (
+        <PreviewResumo
+          onClose={() => setShowPreview(false)}
+          operadorNome={operadorAtual.nome}
+          data={data}
+          horaInicio={horaInicio}
+          horaFim={horaFim}
+          horas={calcHorasTotais(horaInicio, horaFim)}
+          categoriaNome={categoriaSelecionada?.nome ?? ''}
+          atividadeNome={atividadeSelecionada?.nome ?? ''}
+          equipeNomes={equipeNomes}
+          descricao={descricao}
+          descricaoRevisada={descricaoRevisada}
         />
       )}
     </div>

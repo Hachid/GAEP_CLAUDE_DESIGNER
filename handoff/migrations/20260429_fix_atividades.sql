@@ -22,9 +22,13 @@ ALTER TABLE public.atividades
 ALTER TABLE public.atividades
   DROP COLUMN IF EXISTS categoria_id;
 
--- ── PASSO 5 — Criar UNIQUE(nome) para atividades ativas ──────────────────────
+-- ── PASSO 5 — Criar unicidade apenas para atividades ativas ───────────────────
 ALTER TABLE public.atividades
-  ADD CONSTRAINT atividades_nome_key UNIQUE (nome);
+  DROP CONSTRAINT IF EXISTS atividades_nome_key;
+
+CREATE UNIQUE INDEX IF NOT EXISTS atividades_nome_ativo_uidx
+  ON public.atividades (lower(nome))
+  WHERE deleted_at IS NULL;
 
 -- ── PASSO 6 — Confirmar estrutura ────────────────────────────────────────────
 SELECT column_name, data_type, is_nullable

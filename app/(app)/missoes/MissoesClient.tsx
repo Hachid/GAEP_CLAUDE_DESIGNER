@@ -8,6 +8,7 @@ import { registrarMissao, editarMissao, excluirMissao } from './actions'
 export interface OperadorOption {
   id: string
   nome: string
+  numerica: string | null
 }
 
 export interface TipoMissaoOption {
@@ -68,7 +69,25 @@ function fmtMoeda(v: number) {
 }
 
 function fmtData(iso: string) {
-  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  const [year, month, day] = iso.slice(0, 10).split('-')
+  if (!year || !month || !day) return '--/--/--'
+  return `${day}/${month}/${year.slice(-2)}`
+}
+
+function parseQtdInput(raw: string): number | null {
+  const normalized = raw.trim().replace(',', '.')
+  if (!normalized) return null
+  if (!/^\d*(\.\d+)?$/.test(normalized)) return null
+  if (normalized === '.' || normalized === ',') return null
+  const value = Number(normalized)
+  if (!Number.isFinite(value)) return null
+  return value
+}
+
+function fmtQtd(value: number): string {
+  if (!Number.isFinite(value)) return ''
+  const asText = Number.isInteger(value) ? String(value) : value.toString()
+  return asText.replace('.', ',')
 }
 
 // ── Sub-componentes ───────────────────────────────────────────
@@ -118,7 +137,7 @@ function FormRegistro({ operadores, tiposMissao, operadorAtualId, onRegistrada, 
   const [form, setForm] = useState({
     operadorId: operadorInicial?.id ?? '',
     tipoMissaoId: tiposMissao[0]?.id ?? '',
-    qtd: 1,
+    qtdInput: '1',
     observacao: '',
   })
   const [operadorBusca, setOperadorBusca] = useState(operadorInicial?.nome ?? '')
@@ -126,7 +145,8 @@ function FormRegistro({ operadores, tiposMissao, operadorAtualId, onRegistrada, 
   const [pending, start] = useTransition()
 
   const tipoSelecionado = tiposMissao.find((t) => t.id === form.tipoMissaoId)
-  const valorPreview = tipoSelecionado ? form.qtd * tipoSelecionado.valor : 0
+  const qtdValue = parseQtdInput(form.qtdInput)
+  const valorPreview = tipoSelecionado && qtdValue ? qtdValue * tipoSelecionado.valor : 0
   const operadoresFiltrados = useMemo(() => {
     const termo = operadorBusca.trim().toLowerCase()
     if (!termo) return operadores.slice(0, 8)
@@ -154,7 +174,7 @@ function FormRegistro({ operadores, tiposMissao, operadorAtualId, onRegistrada, 
       onToast('❌ Selecione o tipo de diária.')
       return
     }
-    if (form.qtd < 1) {
+    if (!qtdValue || qtdValue <= 0) {
       onToast('❌ Informe uma quantidade válida de diárias.')
       return
     }
@@ -164,7 +184,7 @@ function FormRegistro({ operadores, tiposMissao, operadorAtualId, onRegistrada, 
         operadorId: operadorSelecionado.id,
         tipoMissaoId: form.tipoMissaoId,
         tipoSnapshot: tipoSelecionado.tipo,
-        qtd: form.qtd,
+        qtd: qtdValue,
         valorUnitarioSnapshot: tipoSelecionado.valor,
         observacao: form.observacao,
       })
@@ -175,14 +195,14 @@ function FormRegistro({ operadores, tiposMissao, operadorAtualId, onRegistrada, 
         operadorNome: operadorSelecionado.nome ?? '—',
         tipoMissaoId: form.tipoMissaoId,
         tipoSnapshot: tipoSelecionado.tipo,
-        qtd: form.qtd,
+        qtd: qtdValue,
         valorUnitarioSnapshot: tipoSelecionado.valor,
         valorTotal: valorPreview,
         observacao: form.observacao.trim() || null,
         createdAt: new Date().toISOString(),
       })
       onToast('✅ Missão registrada!')
-      setForm((f) => ({ ...f, qtd: 1, observacao: '' }))
+      setForm((f) => ({ ...f, qtdInput: '1', observacao: '' }))
     })
   }
 
@@ -289,12 +309,12 @@ function FormRegistro({ operadores, tiposMissao, operadorAtualId, onRegistrada, 
 
           <FormField label="Qtd. Diárias">
             <input
-              type="number"
-              min={1}
-              max={99}
-              value={form.qtd}
-              onChange={(e) => setForm((f) => ({ ...f, qtd: Math.max(1, parseInt(e.target.value) || 1) }))}
+              type="text"
+              inputMode="decimal"
+              value={form.qtdInput}
+              onChange={(e) => setForm((f) => ({ ...f, qtdInput: e.target.value }))}
               style={mInput}
+              placeholder="Ex: 0,5"
             />
           </FormField>
         </div>
@@ -314,7 +334,7 @@ function FormRegistro({ operadores, tiposMissao, operadorAtualId, onRegistrada, 
             }}
           >
             <span style={{ fontSize: '0.82rem', color: '#475569', fontWeight: 600 }}>
-              {form.qtd} × {fmtMoeda(tipoSelecionado.valor)}
+              {fmtQtd(qtdValue ?? 0)} × {fmtMoeda(tipoSelecionado.valor)}
             </span>
             <span style={{ fontSize: '1.15rem', fontWeight: 900, color: '#16a34a' }}>
               {fmtMoeda(valorPreview)}
@@ -403,17 +423,18 @@ function IconSortToggle({ asc }: { asc: boolean }) {
 function MissaoCard({ missao, tiposMissao, onEdited, onDeleted, onToast }: MissaoCardProps) {
   const [editando, setEditando] = useState(false)
   const [tipoMissaoIdEdit, setTipoMissaoIdEdit] = useState(missao.tipoMissaoId)
-  const [qtdEdit, setQtdEdit] = useState(missao.qtd)
+  const [qtdEditInput, setQtdEditInput] = useState(fmtQtd(missao.qtd))
   const [obsEdit, setObsEdit] = useState(missao.observacao ?? '')
   const [motivoEdit, setMotivoEdit] = useState('')
   const [pending, start] = useTransition()
 
   const tipoEditSel = tiposMissao.find((t) => t.id === tipoMissaoIdEdit)
-  const valorPreviewEdit = tipoEditSel ? qtdEdit * tipoEditSel.valor : 0
+  const qtdEdit = parseQtdInput(qtdEditInput)
+  const valorPreviewEdit = tipoEditSel && qtdEdit ? qtdEdit * tipoEditSel.valor : 0
 
   function abrirEdicao() {
     setTipoMissaoIdEdit(missao.tipoMissaoId)
-    setQtdEdit(missao.qtd)
+    setQtdEditInput(fmtQtd(missao.qtd))
     setObsEdit(missao.observacao ?? '')
     setMotivoEdit('')
     setEditando(true)
@@ -424,7 +445,7 @@ function MissaoCard({ missao, tiposMissao, onEdited, onDeleted, onToast }: Missa
       onToast('❌ Selecione o tipo de diária.')
       return
     }
-    if (qtdEdit < 1) {
+    if (!qtdEdit || qtdEdit <= 0) {
       onToast('❌ Quantidade inválida.')
       return
     }
@@ -481,7 +502,7 @@ function MissaoCard({ missao, tiposMissao, onEdited, onDeleted, onToast }: Missa
           }}
         >
           <div style={{ fontSize: '0.65rem', color: '#1a237e', fontWeight: 800, textTransform: 'uppercase' }}>
-            {editando ? qtdEdit : missao.qtd}×
+            {editando ? fmtQtd(qtdEdit ?? 0) : fmtQtd(missao.qtd)}×
           </div>
           <div style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600, marginTop: 1 }}>
             {fmtData(missao.createdAt)}
@@ -524,12 +545,12 @@ function MissaoCard({ missao, tiposMissao, onEdited, onDeleted, onToast }: Missa
                 <div>
                   <span style={{ ...lStyle, marginBottom: 4 }}>Qtd.</span>
                   <input
-                    type="number"
-                    min={1}
-                    max={999}
-                    value={qtdEdit}
-                    onChange={(e) => setQtdEdit(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    type="text"
+                    inputMode="decimal"
+                    value={qtdEditInput}
+                    onChange={(e) => setQtdEditInput(e.target.value)}
                     style={{ ...mInput, fontSize: '0.82rem' }}
+                    placeholder="Ex: 4,5"
                   />
                 </div>
               </div>
@@ -550,7 +571,7 @@ function MissaoCard({ missao, tiposMissao, onEdited, onDeleted, onToast }: Missa
                   }}
                 >
                   <span>
-                    {qtdEdit} × {fmtMoeda(tipoEditSel.valor)}
+                    {fmtQtd(qtdEdit ?? 0)} × {fmtMoeda(tipoEditSel.valor)}
                   </span>
                   <span style={{ color: '#16a34a', fontWeight: 900 }}>{fmtMoeda(valorPreviewEdit)}</span>
                 </div>
@@ -593,7 +614,7 @@ function MissaoCard({ missao, tiposMissao, onEdited, onDeleted, onToast }: Missa
                   onClick={() => {
                     setEditando(false)
                     setTipoMissaoIdEdit(missao.tipoMissaoId)
-                    setQtdEdit(missao.qtd)
+                    setQtdEditInput(fmtQtd(missao.qtd))
                     setObsEdit(missao.observacao ?? '')
                     setMotivoEdit('')
                   }}
@@ -663,6 +684,7 @@ function MissaoCard({ missao, tiposMissao, onEdited, onDeleted, onToast }: Missa
 interface OperadorGroup {
   operadorId: string
   operadorNome: string
+  operadorNumerica: string | null
   missoes: MissaoRow[]
   totalGeral: number
 }
@@ -722,7 +744,7 @@ function OperadorAccordion({ group, tiposMissao, onEdited, onDeleted, onToast }:
             flexShrink: 0,
           }}
         >
-          {group.operadorNome[0]}
+          {group.operadorNumerica?.trim() || ''}
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -732,7 +754,7 @@ function OperadorAccordion({ group, tiposMissao, onEdited, onDeleted, onToast }:
             </span>
           </div>
           <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>
-            {group.missoes.length} missão{group.missoes.length !== 1 ? 'ões' : ''} registrada{group.missoes.length !== 1 ? 's' : ''}
+            {group.missoes.length} {group.missoes.length === 1 ? 'Missão Registrada' : 'Missões Registradas'}
           </div>
         </div>
 
@@ -808,6 +830,7 @@ export function MissoesClient({ operadores, tiposMissao, missoes: initialMissoes
   // Ranking: só operadores com ao menos uma missão (evita lista longa de zeros
   // e confusão quando a ordenação crescente colocaria R$ 0 no topo).
   const ranking = useMemo(() => {
+    const operadorNumericaMap = new Map(operadores.map((o) => [o.id, o.numerica]))
     const groupMap = new Map<string, OperadorGroup>()
     for (const m of missoes) {
       const existing = groupMap.get(m.operadorId)
@@ -818,6 +841,7 @@ export function MissoesClient({ operadores, tiposMissao, missoes: initialMissoes
         groupMap.set(m.operadorId, {
           operadorId: m.operadorId,
           operadorNome: m.operadorNome,
+          operadorNumerica: operadorNumericaMap.get(m.operadorId) ?? null,
           missoes: [m],
           totalGeral: m.valorTotal,
         })
@@ -828,11 +852,31 @@ export function MissoesClient({ operadores, tiposMissao, missoes: initialMissoes
       ordemTotal === 'asc' ? a.totalGeral - b.totalGeral : b.totalGeral - a.totalGeral
     )
     return arr
-  }, [missoes, ordemTotal])
+  }, [missoes, operadores, ordemTotal])
 
   return (
     <div style={{ paddingBottom: 30 }}>
       <Toast msg={toast} />
+
+      <div style={{ marginBottom: 12 }}>
+        <button
+          type="button"
+          onClick={() => window.open('/missoes/relatorio?pdf=1', '_blank', 'noopener,noreferrer')}
+          style={{
+            width: '100%',
+            padding: '10px 12px',
+            borderRadius: 10,
+            border: '1px solid #1a237e',
+            background: '#1a237e',
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: '0.82rem',
+            cursor: 'pointer',
+          }}
+        >
+          🖨 Gerar Relatório PDF
+        </button>
+      </div>
 
       <FormRegistro
         operadores={operadores}

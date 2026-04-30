@@ -9,7 +9,15 @@
       "Bash(npm install *)",
       "Bash(npm run *)",
       "mcp__claude_ai_SUPABASE__execute_sql",
-      "mcp__claude_ai_SUPABASE__apply_migration"
+      "mcp__claude_ai_SUPABASE__apply_migration",
+      "Bash(npx tsc *)",
+      "mcp__claude_ai_SUPABASE__list_tables",
+      "Bash(xargs grep *)",
+      "Bash(node -e \"const p = require\\('./package.json'\\); console.log\\('next:', p.dependencies.next\\)\")"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }

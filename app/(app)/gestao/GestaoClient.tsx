@@ -7,11 +7,15 @@ import {
   editarOperador,
   toggleAtivoOperador,
   adicionarAtividade,
+  editarAtividade,
   removerAtividade,
   adicionarFeriado,
   removerFeriado,
   salvarConfigIA,
   salvarConfigRelatorio,
+  salvarMargensPdf,
+  salvarTimbradoBase64,
+  removerTimbrado,
   testarPromptIA,
   editarDiaria,
   adicionarGaep,
@@ -24,11 +28,21 @@ import {
 export interface OperadorRow {
   id: string
   nome: string
+  nome_completo: string | null
   matricula: string
   perfil: string
   equipe: string | null
   ativo: boolean
   email_funcional: string | null
+  numerica: string | null
+  tipo_sanguineo: string | null
+  alergia: string | null
+  contato_emergencia: string | null
+  nome_contato_emergencia: string | null
+  plano_saude: string | null
+  numero_carteirinha: string | null
+  cpf: string | null
+  email: string | null
 }
 
 export interface AtividadeRow {
@@ -57,16 +71,31 @@ export interface EstiloBlocoRelatorio {
   align: AlinhamentoRelatorio
   indent: number
   lineHeight: number
+  fontSize?: number
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  marginTop?: number
+  marginBottom?: number
 }
 
 export interface ConfigRelatorioUIData {
   id: string | null
   tituloTexto: string
+  subtituloTexto: string
   descricaoTexto: string
   rodapeTexto: string
   tituloEstilo: EstiloBlocoRelatorio
+  subtituloEstilo: EstiloBlocoRelatorio
   descricaoEstilo: EstiloBlocoRelatorio
   rodapeEstilo: EstiloBlocoRelatorio
+  timbradoUrl: string | null
+  printMargins: {
+    top: number
+    right: number
+    bottom: number
+    left: number
+  }
 }
 
 export interface DiariaRow {
@@ -131,6 +160,10 @@ function fmtData(iso: string) {
 
 function fmtMoeda(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
+}
+
+function sortAtividades(list: AtividadeRow[]) {
+  return [...list].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }))
 }
 
 // ── Componentes auxiliares ────────────────────────────────────
@@ -347,7 +380,23 @@ type ModalMode = 'add' | OperadorRow | null
 function TabEfetivo({ gaepId, initial }: { gaepId: string; initial: OperadorRow[] }) {
   const [ops, setOps] = useState<OperadorRow[]>(initial)
   const [modal, setModal] = useState<ModalMode>(null)
-  const [form, setForm] = useState({ nome: '', matricula: '', senha: '', perfil: 'OPERADOR', equipe: 'Alpha' })
+  const [form, setForm] = useState({
+    nome: '',
+    nomeCompleto: '',
+    matricula: '',
+    senha: '',
+    perfil: 'OPERADOR',
+    equipe: 'Alpha',
+    numerica: '',
+    tipoSanguineo: '',
+    alergia: '',
+    contatoEmergencia: '',
+    nomeContatoEmergencia: '',
+    planoSaude: '',
+    numeroCarteirinha: '',
+    cpf: '',
+    email: '',
+  })
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState('')
   const [pending, startTransition] = useTransition()
@@ -358,12 +407,44 @@ function TabEfetivo({ gaepId, initial }: { gaepId: string; initial: OperadorRow[
   }
 
   function openAdd() {
-    setForm({ nome: '', matricula: '', senha: '', perfil: 'OPERADOR', equipe: 'Alpha' })
+    setForm({
+      nome: '',
+      nomeCompleto: '',
+      matricula: '',
+      senha: '',
+      perfil: 'OPERADOR',
+      equipe: 'Alpha',
+      numerica: '',
+      tipoSanguineo: '',
+      alergia: '',
+      contatoEmergencia: '',
+      nomeContatoEmergencia: '',
+      planoSaude: '',
+      numeroCarteirinha: '',
+      cpf: '',
+      email: '',
+    })
     setModal('add')
   }
 
   function openEdit(op: OperadorRow) {
-    setForm({ nome: op.nome, matricula: op.matricula, senha: '', perfil: op.perfil, equipe: op.equipe ?? 'Alpha' })
+    setForm({
+      nome: op.nome,
+      nomeCompleto: op.nome_completo ?? '',
+      matricula: op.matricula,
+      senha: '',
+      perfil: op.perfil,
+      equipe: op.equipe ?? 'Alpha',
+      numerica: op.numerica ?? '',
+      tipoSanguineo: op.tipo_sanguineo ?? '',
+      alergia: op.alergia ?? '',
+      contatoEmergencia: op.contato_emergencia ?? '',
+      nomeContatoEmergencia: op.nome_contato_emergencia ?? '',
+      planoSaude: op.plano_saude ?? '',
+      numeroCarteirinha: op.numero_carteirinha ?? '',
+      cpf: op.cpf ?? '',
+      email: op.email ?? '',
+    })
     setModal(op)
   }
 
@@ -377,16 +458,71 @@ function TabEfetivo({ gaepId, initial }: { gaepId: string; initial: OperadorRow[
         if (res.error) { showToast(`❌ ${res.error}`); return }
         setOps((prev) => [
           ...prev,
-          { id: res.id!, nome: form.nome, matricula: form.matricula, perfil: form.perfil, equipe: form.equipe, ativo: true, email_funcional: null },
+          {
+            id: res.id!,
+            nome: form.nome,
+            nome_completo: form.nomeCompleto || null,
+            matricula: form.matricula,
+            perfil: form.perfil,
+            equipe: form.equipe,
+            ativo: true,
+            email_funcional: null,
+            numerica: form.numerica || null,
+            tipo_sanguineo: form.tipoSanguineo || null,
+            alergia: form.alergia || null,
+            contato_emergencia: form.contatoEmergencia || null,
+            nome_contato_emergencia: form.nomeContatoEmergencia || null,
+            plano_saude: form.planoSaude || null,
+            numero_carteirinha: form.numeroCarteirinha || null,
+            cpf: form.cpf || null,
+            email: form.email || null,
+          },
         ])
         showToast('✅ Operador cadastrado com sucesso!')
+        setModal(null)
       } else {
-        const res = await editarOperador(snap.id, { nome: form.nome, perfil: form.perfil, equipe: form.equipe || null })
+        const res = await editarOperador(snap.id, {
+          nome: form.nome,
+          nomeCompleto: form.nomeCompleto,
+          matricula: form.matricula,
+          perfil: form.perfil,
+          equipe: form.equipe || null,
+          numerica: form.numerica,
+          tipoSanguineo: form.tipoSanguineo,
+          alergia: form.alergia,
+          contatoEmergencia: form.contatoEmergencia,
+          nomeContatoEmergencia: form.nomeContatoEmergencia,
+          planoSaude: form.planoSaude,
+          numeroCarteirinha: form.numeroCarteirinha,
+          cpf: form.cpf,
+          email: form.email,
+        })
         if (res.error) { showToast(`❌ ${res.error}`); return }
-        setOps((prev) => prev.map((x) => x.id === snap.id ? { ...x, nome: form.nome, perfil: form.perfil, equipe: form.equipe || null } : x))
+        setOps((prev) =>
+          prev.map((x) =>
+            x.id === snap.id
+              ? {
+                  ...x,
+                  nome: form.nome,
+                  nome_completo: form.nomeCompleto || null,
+                  perfil: form.perfil,
+                  equipe: form.equipe || null,
+                  numerica: form.numerica || null,
+                  tipo_sanguineo: form.tipoSanguineo || null,
+                  alergia: form.alergia || null,
+                  contato_emergencia: form.contatoEmergencia || null,
+                  nome_contato_emergencia: form.nomeContatoEmergencia || null,
+                  plano_saude: form.planoSaude || null,
+                  numero_carteirinha: form.numeroCarteirinha || null,
+                  cpf: form.cpf || null,
+                  email: form.email || null,
+                }
+              : x
+          )
+        )
         showToast('✅ Operador atualizado!')
+        setModal(null)
       }
-      setModal(null)
     })
   }
 
@@ -445,12 +581,14 @@ function TabEfetivo({ gaepId, initial }: { gaepId: string; initial: OperadorRow[
                 flexShrink: 0,
               }}
             >
-              {op.nome[0]}
+              {op.numerica?.trim() || ''}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b' }}>{op.nome}</div>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e293b' }}>
+                {op.nome_completo?.trim() || op.nome}
+              </div>
               <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                Mat. {op.matricula} · Equipe {op.equipe ?? '—'}
+                Mat. {op.matricula} · Num. {op.numerica?.trim() || '—'}
               </div>
               <div style={{ marginTop: 3 }}>
                 <Tag perfil={op.perfil} />
@@ -487,13 +625,20 @@ function TabEfetivo({ gaepId, initial }: { gaepId: string; initial: OperadorRow[
               autoFocus
             />
           </FormField>
+          <FormField label="Nome Completo">
+            <input
+              value={form.nomeCompleto}
+              onChange={(e) => setForm((f) => ({ ...f, nomeCompleto: e.target.value }))}
+              style={mInput}
+              placeholder="Nome completo do operador"
+            />
+          </FormField>
           <FormField label="Matrícula">
             <input
               value={form.matricula}
               onChange={(e) => setForm((f) => ({ ...f, matricula: e.target.value }))}
               style={mInput}
               placeholder="Ex: 013"
-              disabled={modal !== 'add'}
             />
           </FormField>
           {modal === 'add' && (
@@ -530,6 +675,84 @@ function TabEfetivo({ gaepId, initial }: { gaepId: string; initial: OperadorRow[
               </select>
             </FormField>
           </div>
+          <FormField label="Numérica">
+            <input
+              value={form.numerica}
+              onChange={(e) => setForm((f) => ({ ...f, numerica: e.target.value }))}
+              style={mInput}
+              placeholder="Ex: 12"
+            />
+          </FormField>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <FormField label="Tipo Sanguíneo">
+              <input
+                value={form.tipoSanguineo}
+                onChange={(e) => setForm((f) => ({ ...f, tipoSanguineo: e.target.value }))}
+                style={mInput}
+                placeholder="Ex: O+"
+              />
+            </FormField>
+            <FormField label="Alergia">
+              <input
+                value={form.alergia}
+                onChange={(e) => setForm((f) => ({ ...f, alergia: e.target.value }))}
+                style={mInput}
+                placeholder="Ex: Dipirona"
+              />
+            </FormField>
+          </div>
+          <FormField label="Contato de Emergência">
+            <input
+              value={form.contatoEmergencia}
+              onChange={(e) => setForm((f) => ({ ...f, contatoEmergencia: e.target.value }))}
+              style={mInput}
+              placeholder="Ex: (44) 99999-9999"
+            />
+          </FormField>
+          <FormField label="Nome do Contato">
+            <input
+              value={form.nomeContatoEmergencia}
+              onChange={(e) => setForm((f) => ({ ...f, nomeContatoEmergencia: e.target.value }))}
+              style={mInput}
+              placeholder="Nome completo"
+            />
+          </FormField>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <FormField label="Plano de Saúde">
+              <input
+                value={form.planoSaude}
+                onChange={(e) => setForm((f) => ({ ...f, planoSaude: e.target.value }))}
+                style={mInput}
+                placeholder="Ex: Unimed"
+              />
+            </FormField>
+            <FormField label="Nº da Carteirinha">
+              <input
+                value={form.numeroCarteirinha}
+                onChange={(e) => setForm((f) => ({ ...f, numeroCarteirinha: e.target.value }))}
+                style={mInput}
+              />
+            </FormField>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <FormField label="CPF">
+              <input
+                value={form.cpf}
+                onChange={(e) => setForm((f) => ({ ...f, cpf: e.target.value }))}
+                style={mInput}
+                placeholder="Somente números"
+              />
+            </FormField>
+            <FormField label="E-mail">
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                style={mInput}
+                placeholder="nome@dominio.com"
+              />
+            </FormField>
+          </div>
           <button
             onClick={salvar}
             disabled={pending || !form.nome.trim() || !form.matricula.trim()}
@@ -562,9 +785,11 @@ function TabAtividades({
   initialAtividades: AtividadeRow[]
   categorias: { id: string; nome: string }[]
 }) {
-  const [atividades, setAtividades] = useState<AtividadeRow[]>(initialAtividades)
+  const [atividades, setAtividades] = useState<AtividadeRow[]>(() => sortAtividades(initialAtividades))
   const [modal, setModal] = useState(false)
+  const [editModal, setEditModal] = useState<AtividadeRow | null>(null)
   const [novaAtiv, setNovaAtiv] = useState('')
+  const [nomeEdit, setNomeEdit] = useState('')
   const [toast, setToast] = useState('')
   const [pending, startTransition] = useTransition()
 
@@ -574,12 +799,18 @@ function TabAtividades({
   }
 
   function adicionar() {
-    if (!novaAtiv.trim()) return
+    const nomeLimpo = novaAtiv.trim()
+    if (!nomeLimpo) return
+    const existeDuplicada = atividades.some((a) => a.nome.trim().toLocaleLowerCase('pt-BR') === nomeLimpo.toLocaleLowerCase('pt-BR'))
+    if (existeDuplicada) {
+      showToast('❌ Já existe uma atividade com esse nome.')
+      return
+    }
     startTransition(async () => {
-      const res = await adicionarAtividade(novaAtiv)
+      const res = await adicionarAtividade(nomeLimpo)
       if (res.error) { showToast(`❌ ${res.error}`); return }
-      setAtividades((prev) => [...prev, { id: res.id!, nome: novaAtiv.trim() }])
-      showToast(`✅ "${novaAtiv.trim()}" adicionada`)
+      setAtividades((prev) => sortAtividades([...prev, { id: res.id!, nome: nomeLimpo }]))
+      showToast(`✅ "${nomeLimpo}" adicionada`)
       setNovaAtiv('')
       setModal(false)
     })
@@ -591,6 +822,35 @@ function TabAtividades({
       if (res.error) { showToast(`❌ ${res.error}`); return }
       setAtividades((prev) => prev.filter((a) => a.id !== id))
       showToast(`🗑️ "${nome}" removida`)
+    })
+  }
+
+  function abrirEdicao(atividade: AtividadeRow) {
+    setEditModal(atividade)
+    setNomeEdit(atividade.nome)
+  }
+
+  function salvarEdicao() {
+    const nomeLimpo = nomeEdit.trim()
+    if (!editModal || !nomeLimpo) return
+    const existeDuplicada = atividades.some(
+      (a) =>
+        a.id !== editModal.id &&
+        a.nome.trim().toLocaleLowerCase('pt-BR') === nomeLimpo.toLocaleLowerCase('pt-BR')
+    )
+    if (existeDuplicada) {
+      showToast('❌ Já existe uma atividade com esse nome.')
+      return
+    }
+    startTransition(async () => {
+      const res = await editarAtividade(editModal.id, nomeLimpo)
+      if (res.error) { showToast(`❌ ${res.error}`); return }
+      setAtividades((prev) =>
+        sortAtividades(prev.map((a) => (a.id === editModal.id ? { ...a, nome: nomeLimpo } : a)))
+      )
+      setEditModal(null)
+      setNomeEdit('')
+      showToast('✅ Atividade atualizada')
     })
   }
 
@@ -621,6 +881,9 @@ function TabAtividades({
           >
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1a237e', flexShrink: 0 }} />
             <span style={{ flex: 1, fontSize: '0.9rem', color: '#1e293b', fontWeight: 600 }}>{a.nome}</span>
+            <ActionBtn onClick={() => abrirEdicao(a)} color="#2563eb" disabled={pending}>
+              ✏️
+            </ActionBtn>
             <ActionBtn onClick={() => remover(a.id, a.nome)} color="#ef4444" disabled={pending}>
               🗑️
             </ActionBtn>
@@ -664,6 +927,44 @@ function TabAtividades({
             }}
           >
             {pending ? '⏳ Salvando...' : 'Adicionar Atividade'}
+          </button>
+        </Modal>
+      )}
+
+      {editModal && (
+        <Modal
+          title={`Editar Atividade — ${editModal.nome}`}
+          onClose={() => {
+            setEditModal(null)
+            setNomeEdit('')
+          }}
+        >
+          <FormField label="Nome da Atividade">
+            <input
+              value={nomeEdit}
+              onChange={(e) => setNomeEdit(e.target.value)}
+              style={mInput}
+              placeholder="Ex: Operação Especial"
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && salvarEdicao()}
+            />
+          </FormField>
+          <button
+            onClick={salvarEdicao}
+            disabled={pending || !nomeEdit.trim()}
+            style={{
+              width: '100%',
+              padding: 14,
+              background: pending ? '#94a3b8' : '#1a237e',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 10,
+              fontWeight: 700,
+              cursor: pending ? 'not-allowed' : 'pointer',
+              marginTop: 8,
+            }}
+          >
+            {pending ? '⏳ Salvando...' : 'Salvar alterações'}
           </button>
         </Modal>
       )}
@@ -1019,6 +1320,16 @@ function StyleEditor({
             ))}
           </select>
         </FormField>
+        <FormField label="Tamanho (pt)">
+          <input
+            type="number"
+            value={value.fontSize ?? 11}
+            min={7}
+            max={36}
+            onChange={(e) => onChange({ ...value, fontSize: Number(e.target.value || 11) })}
+            style={mInput}
+          />
+        </FormField>
         <FormField label="Recuo (px)">
           <input
             type="number"
@@ -1029,81 +1340,421 @@ function StyleEditor({
             style={mInput}
           />
         </FormField>
+        <FormField label="Espaç. linhas">
+          <input
+            type="number"
+            value={value.lineHeight}
+            min={1}
+            max={3}
+            step={0.1}
+            onChange={(e) => onChange({ ...value, lineHeight: Number(e.target.value || 1) })}
+            style={mInput}
+          />
+        </FormField>
       </div>
-      <FormField label="Espaçamento entre linhas">
-        <input
-          type="number"
-          value={value.lineHeight}
-          min={1}
-          max={3}
-          step={0.1}
-          onChange={(e) => onChange({ ...value, lineHeight: Number(e.target.value || 1) })}
-          style={mInput}
-        />
-      </FormField>
+
+      {/* Negrito / Itálico / Sublinhado */}
+      <div style={{ display: 'flex', gap: 6, marginTop: 10, marginBottom: 10 }}>
+        {(
+          [
+            { key: 'bold', label: 'N', extra: { fontWeight: 'bold' as const } },
+            { key: 'italic', label: 'I', extra: { fontStyle: 'italic' as const } },
+            { key: 'underline', label: 'S', extra: { textDecoration: 'underline' as const } },
+          ] as const
+        ).map(({ key, label, extra }) => {
+          const active = !!value[key]
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onChange({ ...value, [key]: !value[key] })}
+              style={{
+                width: 38,
+                height: 38,
+                border: `1.5px solid ${active ? '#1a237e' : '#e2e8f0'}`,
+                borderRadius: 8,
+                background: active ? '#1a237e' : '#fff',
+                color: active ? '#fff' : '#64748b',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                ...extra,
+              }}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Margens */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <FormField label="Marg. Superior (mm)">
+          <input
+            type="number"
+            value={value.marginTop ?? 0}
+            min={0}
+            max={80}
+            onChange={(e) => onChange({ ...value, marginTop: Number(e.target.value || 0) })}
+            style={mInput}
+          />
+        </FormField>
+        <FormField label="Marg. Inferior (mm)">
+          <input
+            type="number"
+            value={value.marginBottom ?? 0}
+            min={0}
+            max={80}
+            onChange={(e) => onChange({ ...value, marginBottom: Number(e.target.value || 0) })}
+            style={mInput}
+          />
+        </FormField>
+      </div>
     </div>
   )
+}
+
+// Comprime a imagem para A4 @ 96dpi JPEG antes de salvar no banco como base64
+async function compressToA4Jpeg(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const objUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      const MAX_W = 794
+      const MAX_H = 1123
+      let w = img.naturalWidth
+      let h = img.naturalHeight
+      if (w > MAX_W || h > MAX_H) {
+        const ratio = Math.min(MAX_W / w, MAX_H / h)
+        w = Math.round(w * ratio)
+        h = Math.round(h * ratio)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { reject(new Error('Canvas não disponível')); return }
+      ctx.drawImage(img, 0, 0, w, h)
+      URL.revokeObjectURL(objUrl)
+      resolve(canvas.toDataURL('image/jpeg', 0.85))
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(objUrl)
+      reject(new Error('Erro ao ler imagem'))
+    }
+    img.src = objUrl
+  })
+}
+
+// Preview usa CSS transform para WYSIWYG real — fontes em pt real, escalonado para caber na tela
+const PREVIEW_W = 340   // largura visível do preview
+const A4_W = 794        // A4 a 96dpi
+const A4_H = 1123
+const PREVIEW_H = Math.round(A4_H * (PREVIEW_W / A4_W))  // ~478px
+const PREVIEW_SC = PREVIEW_W / A4_W                       // ~0.428
+
+function PreviewRelatorio({ cfg, gaepCodigo }: { cfg: ConfigRelatorioUIData; gaepCodigo: string }) {
+  const tStyle: React.CSSProperties = {
+    fontFamily: cfg.tituloEstilo.fontFamily,
+    color: cfg.tituloEstilo.fontColor,
+    textAlign: cfg.tituloEstilo.align,
+    paddingLeft: `${cfg.tituloEstilo.indent}px`,
+    lineHeight: cfg.tituloEstilo.lineHeight,
+    fontSize: `${cfg.tituloEstilo.fontSize ?? 12}pt`,
+    fontWeight: cfg.tituloEstilo.bold === false ? 'normal' : 'bold',
+    fontStyle: cfg.tituloEstilo.italic ? 'italic' : 'normal',
+    textDecoration: cfg.tituloEstilo.underline ? 'underline' : 'none',
+    marginTop: cfg.tituloEstilo.marginTop ? `${cfg.tituloEstilo.marginTop}mm` : undefined,
+    marginBottom: cfg.tituloEstilo.marginBottom !== undefined ? `${cfg.tituloEstilo.marginBottom}mm` : '2mm',
+    textTransform: 'uppercase',
+    letterSpacing: '1px',
+    whiteSpace: 'pre-line',
+  }
+  const stStyle: React.CSSProperties = {
+    fontFamily: cfg.subtituloEstilo.fontFamily,
+    color: cfg.subtituloEstilo.fontColor,
+    textAlign: cfg.subtituloEstilo.align,
+    paddingLeft: `${cfg.subtituloEstilo.indent}px`,
+    lineHeight: cfg.subtituloEstilo.lineHeight,
+    fontSize: `${cfg.subtituloEstilo.fontSize ?? 11}pt`,
+    fontWeight: cfg.subtituloEstilo.bold ? 'bold' : 'normal',
+    fontStyle: cfg.subtituloEstilo.italic ? 'italic' : 'normal',
+    textDecoration: cfg.subtituloEstilo.underline ? 'underline' : 'none',
+    marginTop: cfg.subtituloEstilo.marginTop ? `${cfg.subtituloEstilo.marginTop}mm` : undefined,
+    marginBottom: cfg.subtituloEstilo.marginBottom !== undefined ? `${cfg.subtituloEstilo.marginBottom}mm` : '3mm',
+    borderBottom: '1.5px solid #333',
+    paddingBottom: '2mm',
+  }
+  const dStyle: React.CSSProperties = {
+    fontFamily: cfg.descricaoEstilo.fontFamily,
+    color: cfg.descricaoEstilo.fontColor,
+    textAlign: cfg.descricaoEstilo.align,
+    paddingLeft: `${cfg.descricaoEstilo.indent}px`,
+    lineHeight: cfg.descricaoEstilo.lineHeight,
+    fontSize: `${cfg.descricaoEstilo.fontSize ?? 11}pt`,
+    fontWeight: cfg.descricaoEstilo.bold ? 'bold' : 'normal',
+    fontStyle: cfg.descricaoEstilo.italic ? 'italic' : 'normal',
+    textDecoration: cfg.descricaoEstilo.underline ? 'underline' : 'none',
+    marginTop: cfg.descricaoEstilo.marginTop ? `${cfg.descricaoEstilo.marginTop}mm` : undefined,
+    marginBottom: cfg.descricaoEstilo.marginBottom !== undefined ? `${cfg.descricaoEstilo.marginBottom}mm` : undefined,
+  }
+  const rStyle: React.CSSProperties = {
+    fontFamily: cfg.rodapeEstilo.fontFamily,
+    color: cfg.rodapeEstilo.fontColor,
+    textAlign: cfg.rodapeEstilo.align,
+    paddingLeft: `${cfg.rodapeEstilo.indent}px`,
+    lineHeight: cfg.rodapeEstilo.lineHeight,
+    fontSize: `${cfg.rodapeEstilo.fontSize ?? 8}pt`,
+    fontWeight: cfg.rodapeEstilo.bold ? 'bold' : 'normal',
+    fontStyle: cfg.rodapeEstilo.italic ? 'italic' : 'normal',
+    textDecoration: cfg.rodapeEstilo.underline ? 'underline' : 'none',
+    marginTop: cfg.rodapeEstilo.marginTop ? `${cfg.rodapeEstilo.marginTop}mm` : undefined,
+    borderTop: '1px solid #ccc',
+    paddingTop: '2mm',
+  }
+
+  return (
+    <div style={{ background: '#64748b', padding: 8, borderRadius: 8, marginTop: 14 }}>
+      <div style={{ fontSize: '0.68rem', color: '#e2e8f0', fontWeight: 700, textAlign: 'center', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        Preview A4 — WYSIWYG
+      </div>
+      {/* Janela de visibilidade do preview */}
+      <div style={{ width: PREVIEW_W, maxWidth: '100%', height: PREVIEW_H, overflow: 'hidden', margin: '0 auto', position: 'relative', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
+        {/* Página A4 real, escalonada via CSS transform */}
+        <div
+          style={{
+            width: A4_W,
+            height: A4_H,
+            transformOrigin: 'top left',
+            transform: `scale(${PREVIEW_SC})`,
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            backgroundColor: '#fff',
+            backgroundImage: cfg.timbradoUrl ? `url(${cfg.timbradoUrl})` : 'none',
+            backgroundSize: '100% 100%',
+            backgroundRepeat: 'no-repeat',
+          }}
+        >
+          {/* Área de conteúdo — mesmas proporções do print-page-content */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '18.5%',
+              left: '15.2%',
+              right: '5.7%',
+              bottom: '9.4%',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={tStyle}>{cfg.tituloTexto || 'RELATÓRIO OPERACIONAL'}</div>
+            <div style={stStyle}>{cfg.subtituloTexto || 'RELATÓRIO DE ATIVIDADE(S)'}</div>
+            <div style={{ fontSize: '9pt', color: '#333', marginBottom: '4mm' }}>
+              Data: 29/04/2026 | 08:00 às 16:00 | Categoria: OPERAR | Atividade: Escolta
+            </div>
+            <div style={{ ...dStyle, flex: 1, overflow: 'hidden' }}>
+              {cfg.descricaoTexto || 'O texto do relatório operacional será exibido aqui com a formatação configurada pelo administrador do sistema.'}
+            </div>
+            <div style={rStyle}>
+              {cfg.rodapeTexto.replace('{{GAEP}}', gaepCodigo).replace('{{VERSAO}}', '1')} · Emitido em 29/04/2026
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type SubTabRelatorio = 'timbrado' | 'titulo' | 'subtitulo' | 'descricao' | 'rodape'
+
+const SUB_TAB_LABELS: Record<SubTabRelatorio, string> = {
+  timbrado: '🖼 Timbrado',
+  titulo: 'Título',
+  subtitulo: 'Subtítulo',
+  descricao: 'Descrição',
+  rodape: 'Rodapé',
 }
 
 function TabRelatorio({
   gaepId,
   operadorId,
+  gaepCodigo,
   initial,
 }: {
   gaepId: string
   operadorId: string
+  gaepCodigo: string
   initial: ConfigRelatorioUIData
 }) {
   const [cfg, setCfg] = useState<ConfigRelatorioUIData>(initial)
-  const [subTab, setSubTab] = useState<'titulo' | 'descricao' | 'rodape'>('titulo')
+  const [subTab, setSubTab] = useState<SubTabRelatorio>('titulo')
+  const [showPreview, setShowPreview] = useState(false)
+  const [uploadando, setUploadando] = useState(false)
   const [toast, setToast] = useState('')
   const [pending, startTransition] = useTransition()
 
   function showToast(msg: string) {
     setToast(msg)
-    setTimeout(() => setToast(''), 3000)
+    setTimeout(() => setToast(''), 3500)
   }
 
   function salvar() {
     startTransition(async () => {
-      const res = await salvarConfigRelatorio(gaepId, operadorId, cfg)
-      if (res.error) {
-        showToast(`❌ ${res.error}`)
-        return
+      try {
+        const res = await salvarConfigRelatorio(gaepId, operadorId, cfg)
+        if (res.error) { showToast(`❌ ${res.error}`); return }
+        showToast('✅ Configuração do relatório salva!')
+      } catch (e) {
+        showToast(`❌ Erro ao salvar: ${(e as Error).message}`)
       }
-      showToast('✅ Configuração do relatório salva!')
     })
+  }
+
+  async function handleTimbradoUpload(file: File) {
+    setUploadando(true)
+    try {
+      const dataUrl = await compressToA4Jpeg(file)
+      const res = await salvarTimbradoBase64(gaepId, dataUrl)
+      if (res.error) { showToast(`❌ ${res.error}`); return }
+      setCfg((prev) => ({ ...prev, timbradoUrl: dataUrl }))
+      showToast('✅ Timbrado enviado com sucesso!')
+    } catch (e) {
+      showToast(`❌ Erro no upload: ${(e as Error).message}`)
+    } finally {
+      setUploadando(false)
+    }
+  }
+
+  async function handleRemoverTimbrado() {
+    setUploadando(true)
+    try {
+      const res = await removerTimbrado()
+      if (res.error) { showToast(`❌ ${res.error}`); return }
+      setCfg((prev) => ({ ...prev, timbradoUrl: null }))
+      showToast('🗑️ Timbrado removido.')
+    } catch (e) {
+      showToast(`❌ Erro ao remover: ${(e as Error).message}`)
+    } finally {
+      setUploadando(false)
+    }
   }
 
   return (
     <div>
       <Toast msg={toast} />
       <AdminCard>
-        <SectionHeader title="Configuração de Relatório (PDF)" />
+        <SectionHeader title="Papel Timbrado e Formatação do PDF" />
         <div style={{ padding: 16 }}>
-          <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.6, marginBottom: 12 }}>
-            O PDF usa o timbrado <code>gaep-cat-header.png</code> como fundo. Ajuste abaixo o estilo de título, descrição e rodapé.
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
-            <ActionBtn onClick={() => setSubTab('titulo')} color={subTab === 'titulo' ? '#1a237e' : '#64748b'}>
-              Título
-            </ActionBtn>
-            <ActionBtn onClick={() => setSubTab('descricao')} color={subTab === 'descricao' ? '#1a237e' : '#64748b'}>
-              Descrição
-            </ActionBtn>
-            <ActionBtn onClick={() => setSubTab('rodape')} color={subTab === 'rodape' ? '#1a237e' : '#64748b'}>
-              Rodapé
-            </ActionBtn>
+
+          {/* Navegação de sub-abas */}
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 14 }}>
+            {(Object.keys(SUB_TAB_LABELS) as SubTabRelatorio[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setSubTab(tab)}
+                style={{
+                  padding: '6px 12px',
+                  background: subTab === tab ? '#1a237e' : 'transparent',
+                  color: subTab === tab ? '#fff' : '#64748b',
+                  border: `1px solid ${subTab === tab ? '#1a237e' : '#e2e8f0'}`,
+                  borderRadius: 20,
+                  fontWeight: 700,
+                  fontSize: '0.72rem',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                {SUB_TAB_LABELS[tab]}
+              </button>
+            ))}
           </div>
 
+          {/* Sub-aba: Timbrado */}
+          {subTab === 'timbrado' && (
+            <div>
+              <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.6, marginBottom: 12 }}>
+                Faça upload de uma imagem PNG ou JPEG para usar como papel timbrado de fundo nos relatórios PDF. O arquivo será exibido ocupando toda a folha A4.
+              </div>
+
+              {cfg.timbradoUrl && (
+                <div style={{ marginBottom: 14 }}>
+                  <label style={lStyle}>Timbrado atual</label>
+                  <div style={{ borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={cfg.timbradoUrl}
+                      alt="Timbrado atual"
+                      style={{ width: '100%', maxHeight: 160, objectFit: 'contain', display: 'block' }}
+                    />
+                  </div>
+                  <button
+                    onClick={handleRemoverTimbrado}
+                    disabled={uploadando}
+                    style={{
+                      marginTop: 8,
+                      padding: '6px 14px',
+                      background: 'rgba(239,68,68,0.08)',
+                      color: '#ef4444',
+                      border: '1px solid rgba(239,68,68,0.25)',
+                      borderRadius: 8,
+                      fontWeight: 700,
+                      fontSize: '0.75rem',
+                      cursor: uploadando ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    🗑️ Remover timbrado
+                  </button>
+                </div>
+              )}
+
+              <label
+                style={{
+                  display: 'block',
+                  padding: '18px 14px',
+                  background: uploadando ? '#f1f5f9' : 'rgba(26,35,126,0.04)',
+                  border: `2px dashed ${uploadando ? '#cbd5e1' : '#1a237e'}`,
+                  borderRadius: 10,
+                  textAlign: 'center',
+                  cursor: uploadando ? 'not-allowed' : 'pointer',
+                  color: uploadando ? '#94a3b8' : '#1a237e',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                }}
+              >
+                {uploadando ? '⏳ Enviando...' : cfg.timbradoUrl ? '📁 Substituir timbrado (PNG/JPEG)' : '📁 Selecionar timbrado (PNG/JPEG)'}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  disabled={uploadando}
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) { handleTimbradoUpload(file) }
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 8, lineHeight: 1.5 }}>
+                Recomendado: A4 em PNG (2480×3508px para alta qualidade). O timbrado ocupa o fundo completo da folha PDF.
+              </div>
+            </div>
+          )}
+
+          {/* Sub-aba: Título */}
           {subTab === 'titulo' && (
             <>
-              <FormField label="Título do Relatório">
-                <input
+              <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.6, marginBottom: 10 }}>
+                Nome completo da organização. Use Enter para quebrar linhas (ex.: linha 1 da hierarquia, linha 2...).
+              </div>
+              <FormField label="Texto do Título (multi-linha)">
+                <textarea
+                  rows={4}
                   value={cfg.tituloTexto}
                   onChange={(e) => setCfg((prev) => ({ ...prev, tituloTexto: e.target.value }))}
-                  style={mInput}
-                  placeholder="RELATÓRIO OPERACIONAL"
+                  style={{ ...mInput, resize: 'vertical' }}
+                  placeholder={'POLÍCIA PENAL FEDERAL\nPENITENCIÁRIA FEDERAL EM CATANDUVAS-PR\nGRUPO DE AÇÕES ESPECIAIS PENAIS-CATANDUVAS'}
                 />
               </FormField>
               <StyleEditor
@@ -1114,15 +1765,41 @@ function TabRelatorio({
             </>
           )}
 
+          {/* Sub-aba: Subtítulo */}
+          {subTab === 'subtitulo' && (
+            <>
+              <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.6, marginBottom: 10 }}>
+                Tipo do documento — aparece abaixo do título, acima da legenda de metadados.
+              </div>
+              <FormField label="Texto do Subtítulo">
+                <input
+                  value={cfg.subtituloTexto}
+                  onChange={(e) => setCfg((prev) => ({ ...prev, subtituloTexto: e.target.value }))}
+                  style={mInput}
+                  placeholder="RELATÓRIO DE ATIVIDADE(S)"
+                />
+              </FormField>
+              <StyleEditor
+                label="Estilo do Subtítulo"
+                value={cfg.subtituloEstilo}
+                onChange={(next) => setCfg((prev) => ({ ...prev, subtituloEstilo: next }))}
+              />
+            </>
+          )}
+
+          {/* Sub-aba: Descrição */}
           {subTab === 'descricao' && (
             <>
-              <FormField label="Descrição Complementar (opcional)">
+              <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.6, marginBottom: 10 }}>
+                Texto fixo opcional exibido antes do conteúdo do relatório (ex.: preâmbulo ou observação padrão).
+              </div>
+              <FormField label="Prefixo da Descrição (opcional)">
                 <textarea
                   rows={3}
                   value={cfg.descricaoTexto}
                   onChange={(e) => setCfg((prev) => ({ ...prev, descricaoTexto: e.target.value }))}
                   style={{ ...mInput, resize: 'vertical' }}
-                  placeholder="Texto fixo opcional para aparecer antes da descrição do relatório."
+                  placeholder="Deixe em branco para omitir."
                 />
               </FormField>
               <StyleEditor
@@ -1133,8 +1810,12 @@ function TabRelatorio({
             </>
           )}
 
+          {/* Sub-aba: Rodapé */}
           {subTab === 'rodape' && (
             <>
+              <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.6, marginBottom: 10 }}>
+                Variáveis disponíveis: <code>{'{{GAEP}}'}</code> (código do GAEP), <code>{'{{VERSAO}}'}</code> (versão do documento).
+              </div>
               <FormField label="Texto do Rodapé">
                 <input
                   value={cfg.rodapeTexto}
@@ -1151,6 +1832,27 @@ function TabRelatorio({
             </>
           )}
 
+          {/* Toggle de preview */}
+          <button
+            onClick={() => setShowPreview((v) => !v)}
+            style={{
+              width: '100%',
+              padding: '10px',
+              background: showPreview ? 'rgba(26,35,126,0.08)' : 'transparent',
+              color: '#1a237e',
+              border: '1px solid rgba(26,35,126,0.3)',
+              borderRadius: 10,
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+              marginTop: 12,
+            }}
+          >
+            {showPreview ? '▲ Ocultar Preview' : '👁 Ver Preview do Relatório'}
+          </button>
+
+          {showPreview && <PreviewRelatorio cfg={cfg} gaepCodigo={gaepCodigo} />}
+
           <button
             onClick={salvar}
             disabled={pending}
@@ -1164,6 +1866,7 @@ function TabRelatorio({
               fontWeight: 700,
               fontSize: '0.85rem',
               cursor: pending ? 'not-allowed' : 'pointer',
+              marginTop: 14,
             }}
           >
             {pending ? '⏳ Salvando...' : '💾 Salvar formatação do relatório'}
@@ -1176,8 +1879,19 @@ function TabRelatorio({
 
 // ── Tab: Diárias ──────────────────────────────────────────────
 
-function TabDiarias({ initial }: { initial: DiariaRow[] }) {
+function TabDiarias({
+  initial,
+  gaepId,
+  operadorId,
+  initialMargins,
+}: {
+  initial: DiariaRow[]
+  gaepId: string
+  operadorId: string
+  initialMargins: { top: number; right: number; bottom: number; left: number }
+}) {
   const [diarias, setDiarias] = useState<DiariaRow[]>(initial)
+  const [margins, setMargins] = useState(initialMargins)
   const [editando, setEditando] = useState<string | null>(null)
   const [form, setForm] = useState<{ locais: string; valor: number }>({ locais: '', valor: 0 })
   const [toast, setToast] = useState('')
@@ -1186,6 +1900,14 @@ function TabDiarias({ initial }: { initial: DiariaRow[] }) {
   function showToast(msg: string) {
     setToast(msg)
     setTimeout(() => setToast(''), 3000)
+  }
+
+  function salvarMargens() {
+    startTransition(async () => {
+      const res = await salvarMargensPdf(gaepId, operadorId, margins)
+      if (res.error) { showToast(`❌ ${res.error}`); return }
+      showToast('✅ Margens de impressão atualizadas!')
+    })
   }
 
   function iniciarEdicao(d: DiariaRow) {
@@ -1220,6 +1942,74 @@ function TabDiarias({ initial }: { initial: DiariaRow[] }) {
       >
         ⚠️ Alterações de valor <strong>não retroagem</strong> em missões já registradas. O valor antigo fica como snapshot.
       </div>
+
+      <AdminCard>
+        <SectionHeader title="Margens de Impressão (PDF)" />
+        <div style={{ padding: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <FormField label="Superior (mm)">
+              <input
+                type="number"
+                min={0}
+                max={40}
+                step={0.5}
+                value={margins.top}
+                onChange={(e) => setMargins((m) => ({ ...m, top: Number(e.target.value) }))}
+                style={mInput}
+              />
+            </FormField>
+            <FormField label="Direita (mm)">
+              <input
+                type="number"
+                min={0}
+                max={40}
+                step={0.5}
+                value={margins.right}
+                onChange={(e) => setMargins((m) => ({ ...m, right: Number(e.target.value) }))}
+                style={mInput}
+              />
+            </FormField>
+            <FormField label="Inferior (mm)">
+              <input
+                type="number"
+                min={0}
+                max={40}
+                step={0.5}
+                value={margins.bottom}
+                onChange={(e) => setMargins((m) => ({ ...m, bottom: Number(e.target.value) }))}
+                style={mInput}
+              />
+            </FormField>
+            <FormField label="Esquerda (mm)">
+              <input
+                type="number"
+                min={0}
+                max={40}
+                step={0.5}
+                value={margins.left}
+                onChange={(e) => setMargins((m) => ({ ...m, left: Number(e.target.value) }))}
+                style={mInput}
+              />
+            </FormField>
+          </div>
+          <button
+            onClick={salvarMargens}
+            disabled={pending}
+            style={{
+              width: '100%',
+              padding: 12,
+              background: pending ? '#94a3b8' : '#1a237e',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 10,
+              fontWeight: 700,
+              cursor: pending ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {pending ? '⏳ Salvando...' : 'Salvar Margens'}
+          </button>
+        </div>
+      </AdminCard>
 
       {diarias.map((d) => (
         <AdminCard key={d.id}>
@@ -1680,6 +2470,7 @@ export function GestaoClient({ data }: { data: GestaoData }) {
         <TabRelatorio
           gaepId={data.gaep.id}
           operadorId={data.operadorAtual.id}
+          gaepCodigo={data.gaep.codigo}
           initial={data.configRelatorio}
         />
       ),
@@ -1687,7 +2478,14 @@ export function GestaoClient({ data }: { data: GestaoData }) {
     {
       id: 'diarias',
       label: 'Diárias',
-      comp: <TabDiarias initial={data.diarias} />,
+      comp: (
+        <TabDiarias
+          initial={data.diarias}
+          gaepId={data.gaep.id}
+          operadorId={data.operadorAtual.id}
+          initialMargins={data.configRelatorio.printMargins}
+        />
+      ),
     },
     {
       id: 'importacao',

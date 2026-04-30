@@ -1,0 +1,15 @@
+{
+  "files": [
+    "20260429_config_relatorio.sql",
+    "20260429_config_relatorio_v2.sql",
+    "20260429_indexes.sql",
+    "20260429_missoes.sql",
+    "20260429_atividades_lista_canonica.sql",
+    "20260429_fix_atividades.sql",
+    "20260430_operadores_numerica.sql",
+    "20260430_operadores_campos_complementares.sql",
+    "20260430_missoes_compat_schema.sql",
+    "20260430_missoes_qtd_decimal.sql",
+    "20260430_config_relatorio_layout_pdf.sql"
+  ]
+}

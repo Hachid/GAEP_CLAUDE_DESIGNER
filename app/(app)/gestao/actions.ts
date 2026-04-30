@@ -8,22 +8,76 @@ type ActionResult = { error?: string }
 type CsvRow = Record<string, string>
 type Alinhamento = 'left' | 'center' | 'right' | 'justify'
 
+function hasValor(value: string | undefined): boolean {
+  return Boolean(value && value.trim())
+}
+
+function normaliza(value: string | null | undefined): string | null {
+  const v = value?.trim()
+  return v ? v : null
+}
+
+function campoDivergiu(input: string | undefined, persisted: string | null | undefined): boolean {
+  if (input === undefined) return false
+  return normaliza(input) !== normaliza(persisted)
+}
+
+function hasCamposComplementares(input: {
+  nomeCompleto?: string
+  numerica?: string
+  tipoSanguineo?: string
+  alergia?: string
+  contatoEmergencia?: string
+  nomeContatoEmergencia?: string
+  planoSaude?: string
+  numeroCarteirinha?: string
+  cpf?: string
+  email?: string
+}) {
+  return (
+    hasValor(input.nomeCompleto) ||
+    hasValor(input.numerica) ||
+    hasValor(input.tipoSanguineo) ||
+    hasValor(input.alergia) ||
+    hasValor(input.contatoEmergencia) ||
+    hasValor(input.nomeContatoEmergencia) ||
+    hasValor(input.planoSaude) ||
+    hasValor(input.numeroCarteirinha) ||
+    hasValor(input.cpf) ||
+    hasValor(input.email)
+  )
+}
+
 export interface BlocoEstiloRelatorio {
   fontFamily: string
   fontColor: string
   align: Alinhamento
   indent: number
   lineHeight: number
+  fontSize?: number
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  marginTop?: number
+  marginBottom?: number
 }
 
 export interface ConfigRelatorioData {
   id: string | null
   tituloTexto: string
+  subtituloTexto: string
   descricaoTexto: string
   rodapeTexto: string
   tituloEstilo: BlocoEstiloRelatorio
+  subtituloEstilo: BlocoEstiloRelatorio
   descricaoEstilo: BlocoEstiloRelatorio
   rodapeEstilo: BlocoEstiloRelatorio
+  printMargins: {
+    top: number
+    right: number
+    bottom: number
+    left: number
+  }
 }
 
 interface OperadorCtx {
@@ -60,10 +114,20 @@ async function getAdminCtx(): Promise<OperadorCtx> {
 export async function criarOperador(input: {
   gaepId: string
   nome: string
+  nomeCompleto?: string
   matricula: string
   senha: string
   perfil: string
   equipe: string
+  numerica?: string
+  tipoSanguineo?: string
+  alergia?: string
+  contatoEmergencia?: string
+  nomeContatoEmergencia?: string
+  planoSaude?: string
+  numeroCarteirinha?: string
+  cpf?: string
+  email?: string
 }): Promise<{ id?: string; error?: string }> {
   try {
     const { admin } = await getAdminCtx()
@@ -76,21 +140,108 @@ export async function criarOperador(input: {
     })
     if (authErr) return { error: authErr.message }
 
-    const { data, error } = await admin
+    const insertPayload = {
+      gaep_id: input.gaepId,
+      auth_id: authData.user.id,
+      nome: input.nome.trim(),
+      nome_completo: input.nomeCompleto?.trim() || null,
+      matricula: input.matricula.trim(),
+      perfil: input.perfil,
+      equipe: input.equipe || null,
+      numerica: input.numerica?.trim() || null,
+      tipo_sanguineo: input.tipoSanguineo?.trim() || null,
+      alergia: input.alergia?.trim() || null,
+      contato_emergencia: input.contatoEmergencia?.trim() || null,
+      nome_contato_emergencia: input.nomeContatoEmergencia?.trim() || null,
+      plano_saude: input.planoSaude?.trim() || null,
+      numero_carteirinha: input.numeroCarteirinha?.trim() || null,
+      cpf: input.cpf?.trim() || null,
+      email: input.email?.trim() || null,
+      ativo: true,
+    }
+
+    let { data, error } = await admin
       .from('operadores')
-      .insert({
-        gaep_id: input.gaepId,
-        auth_id: authData.user.id,
-        nome: input.nome.trim(),
-        matricula: input.matricula.trim(),
-        perfil: input.perfil,
-        equipe: input.equipe || null,
-        ativo: true,
-      })
+      .insert(insertPayload)
       .select('id')
       .single()
 
+    const pediuCamposComplementares = hasCamposComplementares(input)
+
+    if (error) {
+      const retryWithoutNomeCompleto = await admin
+        .from('operadores')
+        .insert({
+          gaep_id: input.gaepId,
+          auth_id: authData.user.id,
+          nome: input.nome.trim(),
+          matricula: input.matricula.trim(),
+          perfil: input.perfil,
+          equipe: input.equipe || null,
+          numerica: input.numerica?.trim() || null,
+          tipo_sanguineo: input.tipoSanguineo?.trim() || null,
+          alergia: input.alergia?.trim() || null,
+          contato_emergencia: input.contatoEmergencia?.trim() || null,
+          nome_contato_emergencia: input.nomeContatoEmergencia?.trim() || null,
+          plano_saude: input.planoSaude?.trim() || null,
+          numero_carteirinha: input.numeroCarteirinha?.trim() || null,
+          cpf: input.cpf?.trim() || null,
+          email: input.email?.trim() || null,
+          ativo: true,
+        })
+        .select('id')
+        .single()
+      data = retryWithoutNomeCompleto.data
+      error = retryWithoutNomeCompleto.error
+    }
+
+    if (error) {
+      const fallbackInsert = await admin
+        .from('operadores')
+        .insert({
+          gaep_id: input.gaepId,
+          auth_id: authData.user.id,
+          nome: input.nome.trim(),
+          matricula: input.matricula.trim(),
+          perfil: input.perfil,
+          equipe: input.equipe || null,
+          ativo: true,
+        })
+        .select('id')
+        .single()
+      data = fallbackInsert.data
+      error = fallbackInsert.error
+    }
+
     if (error) return { error: error.message }
+    if (pediuCamposComplementares && !insertPayload.nome_completo && !data?.id) {
+      return { error: 'Não foi possível salvar os campos complementares do operador.' }
+    }
+    if (pediuCamposComplementares) {
+      const { data: validacao, error: valErr } = await admin
+        .from('operadores')
+        .select('id, nome_completo, numerica, tipo_sanguineo, alergia, contato_emergencia, nome_contato_emergencia, plano_saude, numero_carteirinha, cpf, email')
+        .eq('id', String(data?.id))
+        .maybeSingle()
+      if (valErr || !validacao) {
+        return { error: 'Operador criado, mas não foi possível confirmar os campos complementares no banco.' }
+      }
+      const naoPersistiu =
+        campoDivergiu(input.nomeCompleto, validacao.nome_completo) ||
+        campoDivergiu(input.numerica, validacao.numerica) ||
+        campoDivergiu(input.tipoSanguineo, validacao.tipo_sanguineo) ||
+        campoDivergiu(input.alergia, validacao.alergia) ||
+        campoDivergiu(input.contatoEmergencia, validacao.contato_emergencia) ||
+        campoDivergiu(input.nomeContatoEmergencia, validacao.nome_contato_emergencia) ||
+        campoDivergiu(input.planoSaude, validacao.plano_saude) ||
+        campoDivergiu(input.numeroCarteirinha, validacao.numero_carteirinha) ||
+        campoDivergiu(input.cpf, validacao.cpf) ||
+        campoDivergiu(input.email, validacao.email)
+      if (naoPersistiu) {
+        return { error: 'Campos complementares não persistiram. Aplique a migration de operadores no banco.' }
+      }
+    }
+    if (!data?.id) return { error: 'Não foi possível criar o operador.' }
     revalidatePath('/gestao')
     return { id: String(data.id) }
   } catch (e) {
@@ -100,15 +251,106 @@ export async function criarOperador(input: {
 
 export async function editarOperador(
   id: string,
-  updates: { nome: string; perfil: string; equipe: string | null }
+  updates: {
+    nome: string
+    nomeCompleto?: string
+    matricula?: string
+    perfil: string
+    equipe: string | null
+    numerica?: string
+    tipoSanguineo?: string
+    alergia?: string
+    contatoEmergencia?: string
+    nomeContatoEmergencia?: string
+    planoSaude?: string
+    numeroCarteirinha?: string
+    cpf?: string
+    email?: string
+  }
 ): Promise<ActionResult> {
   try {
     const { admin } = await getAdminCtx()
-    const { error } = await admin
+    const pediuCamposComplementares = hasCamposComplementares(updates)
+    let { error } = await admin
       .from('operadores')
-      .update({ nome: updates.nome.trim(), perfil: updates.perfil, equipe: updates.equipe || null })
+      .update({
+        nome: updates.nome.trim(),
+        nome_completo: updates.nomeCompleto?.trim() || null,
+        matricula: updates.matricula?.trim() || undefined,
+        perfil: updates.perfil,
+        equipe: updates.equipe || null,
+        numerica: updates.numerica?.trim() || null,
+        tipo_sanguineo: updates.tipoSanguineo?.trim() || null,
+        alergia: updates.alergia?.trim() || null,
+        contato_emergencia: updates.contatoEmergencia?.trim() || null,
+        nome_contato_emergencia: updates.nomeContatoEmergencia?.trim() || null,
+        plano_saude: updates.planoSaude?.trim() || null,
+        numero_carteirinha: updates.numeroCarteirinha?.trim() || null,
+        cpf: updates.cpf?.trim() || null,
+        email: updates.email?.trim() || null,
+      })
       .eq('id', id)
+
+    if (error) {
+      const retryWithoutNomeCompleto = await admin
+        .from('operadores')
+        .update({
+          nome: updates.nome.trim(),
+          matricula: updates.matricula?.trim() || undefined,
+          perfil: updates.perfil,
+          equipe: updates.equipe || null,
+          numerica: updates.numerica?.trim() || null,
+          tipo_sanguineo: updates.tipoSanguineo?.trim() || null,
+          alergia: updates.alergia?.trim() || null,
+          contato_emergencia: updates.contatoEmergencia?.trim() || null,
+          nome_contato_emergencia: updates.nomeContatoEmergencia?.trim() || null,
+          plano_saude: updates.planoSaude?.trim() || null,
+          numero_carteirinha: updates.numeroCarteirinha?.trim() || null,
+          cpf: updates.cpf?.trim() || null,
+          email: updates.email?.trim() || null,
+        })
+        .eq('id', id)
+      error = retryWithoutNomeCompleto.error
+    }
+
+    if (error) {
+      const fallback = await admin
+        .from('operadores')
+        .update({
+          nome: updates.nome.trim(),
+          matricula: updates.matricula?.trim() || undefined,
+          perfil: updates.perfil,
+          equipe: updates.equipe || null,
+        })
+        .eq('id', id)
+      error = fallback.error
+    }
+
     if (error) return { error: error.message }
+    if (pediuCamposComplementares) {
+      const { data: validacao, error: valErr } = await admin
+        .from('operadores')
+        .select('id, nome_completo, numerica, tipo_sanguineo, alergia, contato_emergencia, nome_contato_emergencia, plano_saude, numero_carteirinha, cpf, email')
+        .eq('id', id)
+        .maybeSingle()
+      if (valErr || !validacao) {
+        return { error: 'Alteração salva parcialmente. Não foi possível validar os campos complementares.' }
+      }
+      const naoPersistiu =
+        campoDivergiu(updates.nomeCompleto, validacao.nome_completo) ||
+        campoDivergiu(updates.numerica, validacao.numerica) ||
+        campoDivergiu(updates.tipoSanguineo, validacao.tipo_sanguineo) ||
+        campoDivergiu(updates.alergia, validacao.alergia) ||
+        campoDivergiu(updates.contatoEmergencia, validacao.contato_emergencia) ||
+        campoDivergiu(updates.nomeContatoEmergencia, validacao.nome_contato_emergencia) ||
+        campoDivergiu(updates.planoSaude, validacao.plano_saude) ||
+        campoDivergiu(updates.numeroCarteirinha, validacao.numero_carteirinha) ||
+        campoDivergiu(updates.cpf, validacao.cpf) ||
+        campoDivergiu(updates.email, validacao.email)
+      if (naoPersistiu) {
+        return { error: 'Campos complementares não persistiram. Aplique a migration de operadores no banco.' }
+      }
+    }
     revalidatePath('/gestao')
     return {}
   } catch (e) {
@@ -135,14 +377,58 @@ export async function adicionarAtividade(
 ): Promise<{ id?: string; error?: string }> {
   try {
     const { admin } = await getAdminCtx()
+    const nomeLimpo = nome.trim()
+    if (!nomeLimpo) return { error: 'Informe um nome válido para a atividade.' }
+
+    const { data: existente, error: existenteErr } = await admin
+      .from('atividades')
+      .select('id')
+      .ilike('nome', nomeLimpo)
+      .is('deleted_at', null)
+      .maybeSingle()
+    if (existenteErr) return { error: existenteErr.message }
+    if (existente) return { error: 'Já existe uma atividade com esse nome.' }
+
     const { data, error } = await admin
       .from('atividades')
-      .insert({ nome: nome.trim(), ativo: true })
+      .insert({ nome: nomeLimpo, ativo: true })
       .select('id')
       .single()
     if (error) return { error: error.message }
     revalidatePath('/gestao')
     return { id: String(data.id) }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+export async function editarAtividade(
+  id: string,
+  nome: string
+): Promise<ActionResult> {
+  try {
+    const { admin } = await getAdminCtx()
+    const nomeLimpo = nome.trim()
+    if (!nomeLimpo) return { error: 'Informe um nome válido para a atividade.' }
+
+    const { data: existente, error: existenteErr } = await admin
+      .from('atividades')
+      .select('id')
+      .ilike('nome', nomeLimpo)
+      .is('deleted_at', null)
+      .neq('id', id)
+      .maybeSingle()
+    if (existenteErr) return { error: existenteErr.message }
+    if (existente) return { error: 'Já existe uma atividade com esse nome.' }
+
+    const { error } = await admin
+      .from('atividades')
+      .update({ nome: nomeLimpo })
+      .eq('id', id)
+      .is('deleted_at', null)
+    if (error) return { error: error.message }
+    revalidatePath('/gestao')
+    return {}
   } catch (e) {
     return { error: (e as Error).message }
   }
@@ -227,20 +513,160 @@ export async function salvarConfigRelatorio(
 ): Promise<ActionResult> {
   try {
     const { admin } = await getAdminCtx()
-    const { error } = await admin.from('config_relatorio').upsert(
+    let { error } = await admin.from('config_relatorio').upsert(
       {
         gaep_id: gaepId,
         titulo_texto: config.tituloTexto.trim(),
+        subtitulo_texto: config.subtituloTexto.trim(),
         descricao_texto: config.descricaoTexto.trim(),
         rodape_texto: config.rodapeTexto.trim(),
         titulo_estilo: config.tituloEstilo,
+        subtitulo_estilo: config.subtituloEstilo,
         descricao_estilo: config.descricaoEstilo,
         rodape_estilo: config.rodapeEstilo,
+        layout_pdf: {
+          margins: config.printMargins,
+        },
         updated_by: operadorId,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'gaep_id' }
     )
+    if (error) {
+      const fallback = await admin.from('config_relatorio').upsert(
+        {
+          gaep_id: gaepId,
+          titulo_texto: config.tituloTexto.trim(),
+          subtitulo_texto: config.subtituloTexto.trim(),
+          descricao_texto: config.descricaoTexto.trim(),
+          rodape_texto: config.rodapeTexto.trim(),
+          titulo_estilo: config.tituloEstilo,
+          subtitulo_estilo: config.subtituloEstilo,
+          descricao_estilo: config.descricaoEstilo,
+          rodape_estilo: config.rodapeEstilo,
+          updated_by: operadorId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'gaep_id' }
+      )
+      error = fallback.error
+    }
+    if (error) return { error: error.message }
+    revalidatePath('/gestao')
+    revalidatePath('/relatorio')
+    return {}
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+export async function salvarMargensPdf(
+  gaepId: string,
+  operadorId: string,
+  margins: { top: number; right: number; bottom: number; left: number }
+): Promise<ActionResult> {
+  try {
+    const { admin } = await getAdminCtx()
+    const clamped = {
+      top: Math.max(0, Math.min(40, Number(margins.top) || 0)),
+      right: Math.max(0, Math.min(40, Number(margins.right) || 0)),
+      bottom: Math.max(0, Math.min(40, Number(margins.bottom) || 0)),
+      left: Math.max(0, Math.min(40, Number(margins.left) || 0)),
+    }
+    const { error } = await admin.from('config_relatorio').upsert(
+      {
+        gaep_id: gaepId,
+        layout_pdf: { margins: clamped },
+        updated_by: operadorId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'gaep_id' }
+    )
+    if (error) {
+      if (error.message.includes('layout_pdf')) {
+        return { error: 'Banco ainda sem coluna layout_pdf. Execute a migration 20260430_config_relatorio_layout_pdf.sql.' }
+      }
+      return { error: error.message }
+    }
+    revalidatePath('/gestao')
+    revalidatePath('/relatorio')
+    revalidatePath('/missoes/relatorio')
+    return {}
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+export async function uploadTimbrado(
+  formData: FormData
+): Promise<{ url?: string; error?: string }> {
+  try {
+    const { admin, gaepId } = await getAdminCtx()
+    const file = formData.get('file')
+    if (!(file instanceof Blob)) return { error: 'Arquivo inválido.' }
+
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg']
+    const contentType = file.type || 'image/png'
+    if (!validTypes.includes(contentType)) {
+      return { error: 'Apenas PNG ou JPEG são aceitos para o timbrado.' }
+    }
+
+    const ext = contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg' : 'png'
+    const path = `timbrado/${gaepId}/timbrado.${ext}`
+    const bytes = await file.arrayBuffer()
+
+    const { error: storageErr } = await admin.storage
+      .from('relatorios')
+      .upload(path, bytes, { contentType, upsert: true })
+
+    if (storageErr) return { error: `Upload falhou: ${storageErr.message}` }
+
+    const { data: { publicUrl } } = admin.storage
+      .from('relatorios')
+      .getPublicUrl(path)
+
+    const { error: dbErr } = await admin.from('config_relatorio').upsert(
+      { gaep_id: gaepId, timbrado_url: publicUrl, updated_at: new Date().toISOString() },
+      { onConflict: 'gaep_id' }
+    )
+    if (dbErr) return { error: dbErr.message }
+
+    revalidatePath('/gestao')
+    revalidatePath('/relatorio')
+    return { url: publicUrl }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+export async function salvarTimbradoBase64(
+  gaepId: string,
+  dataUrl: string
+): Promise<ActionResult> {
+  try {
+    const { admin } = await getAdminCtx()
+    const { error } = await admin
+      .from('config_relatorio')
+      .upsert(
+        { gaep_id: gaepId, timbrado_url: dataUrl, updated_at: new Date().toISOString() },
+        { onConflict: 'gaep_id' }
+      )
+    if (error) return { error: error.message }
+    revalidatePath('/gestao')
+    revalidatePath('/relatorio')
+    return {}
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+export async function removerTimbrado(): Promise<ActionResult> {
+  try {
+    const { admin, gaepId } = await getAdminCtx()
+    const { error } = await admin
+      .from('config_relatorio')
+      .update({ timbrado_url: null, updated_at: new Date().toISOString() })
+      .eq('gaep_id', gaepId)
     if (error) return { error: error.message }
     revalidatePath('/gestao')
     revalidatePath('/relatorio')

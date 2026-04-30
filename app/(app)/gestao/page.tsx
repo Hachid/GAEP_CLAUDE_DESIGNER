@@ -24,6 +24,24 @@ export default async function GestaoPage() {
 
   const admin = createAdminClient()
 
+  async function carregarConfigRelatorio(gaepId: string) {
+    const withLayout = await admin
+      .from('config_relatorio')
+      .select(
+        'id, titulo_texto, subtitulo_texto, descricao_texto, rodape_texto, titulo_estilo, subtitulo_estilo, descricao_estilo, rodape_estilo, timbrado_url, layout_pdf'
+      )
+      .eq('gaep_id', gaepId)
+      .maybeSingle()
+    if (!withLayout.error) return withLayout
+    return admin
+      .from('config_relatorio')
+      .select(
+        'id, titulo_texto, subtitulo_texto, descricao_texto, rodape_texto, titulo_estilo, subtitulo_estilo, descricao_estilo, rodape_estilo, timbrado_url'
+      )
+      .eq('gaep_id', gaepId)
+      .maybeSingle()
+  }
+
   // ── 2. Operador atual + perfil ────────────────────────────────
   interface OperadorComGaep {
     id: string
@@ -48,15 +66,53 @@ export default async function GestaoPage() {
   const gaep = operador.gaeps
   if (!gaep) redirect('/relatorio')
 
-  // ── 3. Busca de dados em paralelo ─────────────────────────────
-  const [opRes, catRes, atRes, ferRes, iaRes, relatorioCfgRes, diarRes, gaepsRes] = await Promise.all([
-    admin
+  async function listarOperadoresGestao(gaepId: string) {
+    const withExtras = await admin
+      .from('operadores')
+      .select(
+        'id, nome, nome_completo, matricula, perfil, equipe, ativo, email_funcional, numerica, tipo_sanguineo, alergia, contato_emergencia, nome_contato_emergencia, plano_saude, numero_carteirinha, cpf, email'
+      )
+      .eq('gaep_id', gaepId)
+      .is('deleted_at', null)
+      .order('nome')
+
+    if (!withExtras.error) {
+      return (withExtras.data ?? []) as OperadorRow[]
+    }
+
+    const fallback = await admin
       .from('operadores')
       .select('id, nome, matricula, perfil, equipe, ativo, email_funcional')
-      .eq('gaep_id', gaep.id)
+      .eq('gaep_id', gaepId)
       .is('deleted_at', null)
-      .order('nome'),
+      .order('nome')
 
+    return ((fallback.data ?? []) as Array<{
+      id: string
+      nome: string
+      matricula: string
+      perfil: string
+      equipe: string | null
+      ativo: boolean
+      email_funcional: string | null
+    }>).map((o) => ({
+      ...o,
+      numerica: null,
+      nome_completo: null,
+      tipo_sanguineo: null,
+      alergia: null,
+      contato_emergencia: null,
+      nome_contato_emergencia: null,
+      plano_saude: null,
+      numero_carteirinha: null,
+      cpf: null,
+      email: null,
+    }))
+  }
+
+  // ── 3. Busca de dados em paralelo ─────────────────────────────
+  const [opsData, catRes, atRes, ferRes, iaRes, relatorioCfgRes, diarRes, gaepsRes] = await Promise.all([
+    listarOperadoresGestao(gaep.id),
     admin.from('categorias_atividade').select('id, nome').order('nome'),
 
     admin
@@ -77,13 +133,7 @@ export default async function GestaoPage() {
       .eq('gaep_id', gaep.id)
       .maybeSingle(),
 
-    admin
-      .from('config_relatorio')
-      .select(
-        'id, titulo_texto, descricao_texto, rodape_texto, titulo_estilo, descricao_estilo, rodape_estilo'
-      )
-      .eq('gaep_id', gaep.id)
-      .maybeSingle(),
+    carregarConfigRelatorio(gaep.id),
 
     admin.from('tipos_missao').select('id, tipo, locais, valor, vigencia').order('tipo'),
 
@@ -100,7 +150,7 @@ export default async function GestaoPage() {
   const data: GestaoData = {
     operadorAtual: { id: operador.id, nome: String(operador.nome), perfil },
     gaep,
-    operadores: (opRes.data ?? []) as OperadorRow[],
+    operadores: opsData,
     categorias: (catRes.data ?? []) as { id: string; nome: string }[],
     atividades: (atRes.data ?? []) as AtividadeRow[],
     feriados: (ferRes.data ?? []) as FeriadoRow[],
@@ -122,22 +172,35 @@ export default async function GestaoPage() {
       ? {
           id: String(relatorioCfgRes.data.id),
           tituloTexto: String(relatorioCfgRes.data.titulo_texto ?? 'RELATÓRIO OPERACIONAL'),
+          subtituloTexto: String(relatorioCfgRes.data.subtitulo_texto ?? 'RELATÓRIO DE ATIVIDADE(S)'),
           descricaoTexto: String(relatorioCfgRes.data.descricao_texto ?? ''),
           rodapeTexto: String(relatorioCfgRes.data.rodape_texto ?? '{{GAEP}}'),
+          timbradoUrl: relatorioCfgRes.data.timbrado_url ? String(relatorioCfgRes.data.timbrado_url) : null,
           tituloEstilo: {
             fontFamily: 'Times New Roman',
             fontColor: '#000000',
             align: 'center',
             indent: 0,
             lineHeight: 1.4,
+            fontSize: 12,
             ...(relatorioCfgRes.data.titulo_estilo as Record<string, unknown>),
           } as ConfigRelatorioUIData['tituloEstilo'],
+          subtituloEstilo: {
+            fontFamily: 'Times New Roman',
+            fontColor: '#000000',
+            align: 'center',
+            indent: 0,
+            lineHeight: 1.3,
+            fontSize: 11,
+            ...(relatorioCfgRes.data.subtitulo_estilo as Record<string, unknown>),
+          } as ConfigRelatorioUIData['subtituloEstilo'],
           descricaoEstilo: {
             fontFamily: 'Times New Roman',
             fontColor: '#111827',
             align: 'justify',
             indent: 12,
             lineHeight: 1.8,
+            fontSize: 11,
             ...(relatorioCfgRes.data.descricao_estilo as Record<string, unknown>),
           } as ConfigRelatorioUIData['descricaoEstilo'],
           rodapeEstilo: {
@@ -146,20 +209,44 @@ export default async function GestaoPage() {
             align: 'right',
             indent: 0,
             lineHeight: 1.3,
+            fontSize: 8,
             ...(relatorioCfgRes.data.rodape_estilo as Record<string, unknown>),
           } as ConfigRelatorioUIData['rodapeEstilo'],
+          printMargins: (() => {
+            const layout = (relatorioCfgRes.data as Record<string, unknown>)?.layout_pdf as
+              | { margins?: { top?: number; right?: number; bottom?: number; left?: number } }
+              | undefined
+            const m = layout?.margins
+            return {
+              top: Number(m?.top ?? 1.5),
+              right: Number(m?.right ?? 1.5),
+              bottom: Number(m?.bottom ?? 1.5),
+              left: Number(m?.left ?? 1.5),
+            }
+          })(),
         }
       : {
           id: null,
           tituloTexto: 'RELATÓRIO OPERACIONAL',
+          subtituloTexto: 'RELATÓRIO DE ATIVIDADE(S)',
           descricaoTexto: '',
           rodapeTexto: '{{GAEP}}',
+          timbradoUrl: null,
           tituloEstilo: {
             fontFamily: 'Times New Roman',
             fontColor: '#000000',
             align: 'center',
             indent: 0,
             lineHeight: 1.4,
+            fontSize: 12,
+          },
+          subtituloEstilo: {
+            fontFamily: 'Times New Roman',
+            fontColor: '#000000',
+            align: 'center',
+            indent: 0,
+            lineHeight: 1.3,
+            fontSize: 11,
           },
           descricaoEstilo: {
             fontFamily: 'Times New Roman',
@@ -167,6 +254,7 @@ export default async function GestaoPage() {
             align: 'justify',
             indent: 12,
             lineHeight: 1.8,
+            fontSize: 11,
           },
           rodapeEstilo: {
             fontFamily: 'Times New Roman',
@@ -174,7 +262,9 @@ export default async function GestaoPage() {
             align: 'right',
             indent: 0,
             lineHeight: 1.3,
+            fontSize: 8,
           },
+          printMargins: { top: 1.5, right: 1.5, bottom: 1.5, left: 1.5 },
         },
     diarias: (diarRes.data ?? []).map((d) => ({
       id: String(d.id),
