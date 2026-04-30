@@ -26,7 +26,7 @@ type Props = {
   evolucaoInicial: EvolucaoMes[]
   filtrosIniciais: DashboardFiltros
   categorias: { id: string; nome: string }[]
-  atividades: { id: string; nome: string; categoria_id: string }[]
+  atividades: { id: string; nome: string }[]
 }
 
 const cardStyle: React.CSSProperties = {

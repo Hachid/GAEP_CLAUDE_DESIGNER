@@ -14,7 +14,6 @@ interface Categoria {
 interface Atividade {
   id: string
   nome: string
-  categoria_id: string
 }
 
 interface Props {
@@ -50,10 +49,7 @@ export function HistoricoClient({ relatorios, categorias, atividades, perfil, op
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
 
-  const atividadesFiltradas = useMemo(
-    () => (categoriaId ? atividades.filter((a) => a.categoria_id === categoriaId) : atividades),
-    [atividades, categoriaId]
-  )
+  const atividadesFiltradas = atividades
 
   const listaFiltrada = useMemo(() => {
     return relatorios.filter((r) => {

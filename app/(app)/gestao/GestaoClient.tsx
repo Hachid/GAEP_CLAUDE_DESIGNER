@@ -34,7 +34,6 @@ export interface OperadorRow {
 export interface AtividadeRow {
   id: string
   nome: string
-  categoria_id: string
 }
 
 export interface FeriadoRow {
@@ -557,15 +556,8 @@ function TabEfetivo({ gaepId, initial }: { gaepId: string; initial: OperadorRow[
 
 // ── Tab: Atividades ───────────────────────────────────────────
 
-const CAT_COLORS: Record<string, string> = {
-  OPERAR: '#1a237e',
-  TREINAR: '#f97316',
-  INSTRUIR: '#16a34a',
-}
-
 function TabAtividades({
   initialAtividades,
-  categorias,
 }: {
   initialAtividades: AtividadeRow[]
   categorias: { id: string; nome: string }[]
@@ -573,7 +565,6 @@ function TabAtividades({
   const [atividades, setAtividades] = useState<AtividadeRow[]>(initialAtividades)
   const [modal, setModal] = useState(false)
   const [novaAtiv, setNovaAtiv] = useState('')
-  const [novaCatId, setNovaCatId] = useState(categorias[0]?.id ?? '')
   const [toast, setToast] = useState('')
   const [pending, startTransition] = useTransition()
 
@@ -583,13 +574,12 @@ function TabAtividades({
   }
 
   function adicionar() {
-    if (!novaAtiv.trim() || !novaCatId) return
+    if (!novaAtiv.trim()) return
     startTransition(async () => {
-      const res = await adicionarAtividade(novaCatId, novaAtiv)
+      const res = await adicionarAtividade(novaAtiv)
       if (res.error) { showToast(`❌ ${res.error}`); return }
-      const cat = categorias.find((c) => c.id === novaCatId)
-      setAtividades((prev) => [...prev, { id: res.id!, nome: novaAtiv.trim(), categoria_id: novaCatId }])
-      showToast(`✅ "${novaAtiv.trim()}" adicionada em ${cat?.nome ?? ''}`)
+      setAtividades((prev) => [...prev, { id: res.id!, nome: novaAtiv.trim() }])
+      showToast(`✅ "${novaAtiv.trim()}" adicionada`)
       setNovaAtiv('')
       setModal(false)
     })
@@ -607,62 +597,47 @@ function TabAtividades({
   return (
     <div>
       <Toast msg={toast} />
-      {categorias.map((cat) => {
-        const lista = atividades.filter((a) => a.categoria_id === cat.id)
-        const cor = CAT_COLORS[cat.nome] ?? '#64748b'
-        return (
-          <AdminCard key={cat.id}>
-            <SectionHeader
-              title={`${cat.nome} (${lista.length})`}
-              action={
-                <AddBtn
-                  onClick={() => { setNovaCatId(cat.id); setModal(true) }}
-                  label="+ Atividade"
-                  disabled={pending}
-                />
-              }
+      <AdminCard>
+        <SectionHeader
+          title={`Atividades (${atividades.length})`}
+          action={
+            <AddBtn
+              onClick={() => setModal(true)}
+              label="+ Atividade"
+              disabled={pending}
             />
-            {lista.map((a) => (
-              <div
-                key={a.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '10px 16px',
-                  borderBottom: '1px solid #f8fafc',
-                  gap: 10,
-                }}
-              >
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: cor, flexShrink: 0 }} />
-                <span style={{ flex: 1, fontSize: '0.9rem', color: '#1e293b', fontWeight: 600 }}>{a.nome}</span>
-                <ActionBtn onClick={() => remover(a.id, a.nome)} color="#ef4444" disabled={pending}>
-                  🗑️
-                </ActionBtn>
-              </div>
-            ))}
-            {lista.length === 0 && (
-              <div style={{ padding: 16, textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
-                Nenhuma atividade cadastrada
-              </div>
-            )}
-          </AdminCard>
-        )
-      })}
+          }
+        />
+        {atividades.map((a) => (
+          <div
+            key={a.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '10px 16px',
+              borderBottom: '1px solid #f8fafc',
+              gap: 10,
+            }}
+          >
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1a237e', flexShrink: 0 }} />
+            <span style={{ flex: 1, fontSize: '0.9rem', color: '#1e293b', fontWeight: 600 }}>{a.nome}</span>
+            <ActionBtn onClick={() => remover(a.id, a.nome)} color="#ef4444" disabled={pending}>
+              🗑️
+            </ActionBtn>
+          </div>
+        ))}
+        {atividades.length === 0 && (
+          <div style={{ padding: 16, textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
+            Nenhuma atividade cadastrada
+          </div>
+        )}
+      </AdminCard>
 
       {modal && (
         <Modal
-          title={`Nova Atividade — ${categorias.find((c) => c.id === novaCatId)?.nome ?? ''}`}
+          title="Nova Atividade"
           onClose={() => setModal(false)}
         >
-          <FormField label="Categoria">
-            <select value={novaCatId} onChange={(e) => setNovaCatId(e.target.value)} style={mInput}>
-              {categorias.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </select>
-          </FormField>
           <FormField label="Nome da Atividade">
             <input
               value={novaAtiv}

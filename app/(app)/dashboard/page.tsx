@@ -77,7 +77,7 @@ export default async function DashboardPage() {
     admin.from('categorias_atividade').select('id, nome').order('nome'),
     admin
       .from('atividades')
-      .select('id, nome, categoria_id')
+      .select('id, nome')
       .is('deleted_at', null)
       .order('nome'),
     fetchKPIData(gaep.id, filtrosIniciais),
@@ -85,7 +85,7 @@ export default async function DashboardPage() {
   ])
 
   const categorias = (catRes.data ?? []) as { id: string; nome: string }[]
-  const atividades = (atRes.data ?? []) as { id: string; nome: string; categoria_id: string }[]
+  const atividades = (atRes.data ?? []) as { id: string; nome: string }[]
 
   // ── 5. Render ─────────────────────────────────────────────────
   return (

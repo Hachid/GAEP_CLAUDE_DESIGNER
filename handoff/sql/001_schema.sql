@@ -43,13 +43,11 @@ CREATE TABLE categorias_atividade (
 
 -- ── 4. Atividades ────────────────────────────────────────────
 CREATE TABLE atividades (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  categoria_id UUID REFERENCES categorias_atividade(id),
-  nome         TEXT NOT NULL,
-  ativo        BOOLEAN DEFAULT true,
-  created_at   TIMESTAMPTZ DEFAULT now(),
-  deleted_at   TIMESTAMPTZ,
-  UNIQUE(categoria_id, nome)
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nome       TEXT NOT NULL UNIQUE,
+  ativo      BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  deleted_at TIMESTAMPTZ
 );
 
 -- ── 5. Relatórios ────────────────────────────────────────────

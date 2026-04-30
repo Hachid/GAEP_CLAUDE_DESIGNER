@@ -61,7 +61,7 @@ export default async function GestaoPage() {
 
     admin
       .from('atividades')
-      .select('id, nome, categoria_id')
+      .select('id, nome')
       .is('deleted_at', null)
       .order('nome'),
 

@@ -6,7 +6,7 @@ import type { DashboardFiltros } from '@/app/(app)/dashboard/types'
 type Props = {
   filtros: DashboardFiltros
   categorias: { id: string; nome: string }[]
-  atividades: { id: string; nome: string; categoria_id: string }[]
+  atividades: { id: string; nome: string }[]
   onAtualizar: (filtros: DashboardFiltros) => void
   loading: boolean
 }
@@ -14,10 +14,6 @@ type Props = {
 export function FiltrosDash({ filtros, categorias, atividades, onAtualizar, loading }: Props) {
   const [open, setOpen] = useState(false)
   const [local, setLocal] = useState<DashboardFiltros>(filtros)
-
-  const atividadesFiltradas = local.categoriaId
-    ? atividades.filter((a) => a.categoria_id === local.categoriaId)
-    : atividades
 
   function handleCategoriaChange(categoriaId: string) {
     setLocal((prev) => ({ ...prev, categoriaId, atividadeId: '' }))
@@ -141,7 +137,7 @@ export function FiltrosDash({ filtros, categorias, atividades, onAtualizar, load
                 onChange={(e) => setLocal((p) => ({ ...p, atividadeId: e.target.value }))}
               >
                 <option value="">Todas</option>
-                {atividadesFiltradas.map((a) => (
+                {atividades.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.nome}
                   </option>

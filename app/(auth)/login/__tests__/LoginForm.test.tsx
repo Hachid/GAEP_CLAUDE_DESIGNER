@@ -48,7 +48,7 @@ describe('LoginForm', () => {
 
   it('renderiza o input de senha com placeholder correto', () => {
     render(<LoginForm operadores={mockOperadores} />)
-    const input = screen.getByPlaceholderText('Digite sua matrícula')
+    const input = screen.getByPlaceholderText('Digite sua senha')
     expect(input).toBeInTheDocument()
     expect(input).toHaveAttribute('type', 'password')
   })

@@ -77,7 +77,6 @@ export interface CategoriaAtividade {
 
 export interface Atividade {
   id: string
-  categoria_id: string
   nome: string
   descricao: string | null
   created_at: string

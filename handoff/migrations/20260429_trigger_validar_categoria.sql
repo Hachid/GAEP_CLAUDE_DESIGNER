@@ -1,0 +1,4 @@
+-- !! OBSOLETO — NÃO EXECUTAR !!
+-- Este arquivo foi criado com premissa errada: atividades não são vinculadas a categorias.
+-- Qualquer das 3 categorias (OPERAR, TREINAR, INSTRUIR) pode usar qualquer atividade.
+-- Consulte: 20260429_fix_atividades.sql (migração correta)

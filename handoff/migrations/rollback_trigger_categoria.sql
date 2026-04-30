@@ -1,0 +1,3 @@
+-- !! OBSOLETO — NÃO EXECUTAR !!
+-- O trigger que este arquivo tentaria desfazer nunca foi criado.
+-- Consulte: 20260429_fix_atividades.sql

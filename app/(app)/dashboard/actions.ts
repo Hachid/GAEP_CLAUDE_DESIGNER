@@ -16,27 +16,8 @@ type RelRow = {
   hora_inicio: string
   hora_fim: string
   atividade_id: string
-  atividades:
-    | {
-        id: string
-        nome: string
-        categoria_id: string
-        categorias_atividade: { id: string; nome: string } | { id: string; nome: string }[]
-      }
-    | {
-        id: string
-        nome: string
-        categoria_id: string
-        categorias_atividade: { id: string; nome: string } | { id: string; nome: string }[]
-      }[]
-    | null
-}
-
-type AtividadeNested = {
-  id: string
-  nome: string
-  categoria_id: string
-  categorias_atividade: { id: string; nome: string } | { id: string; nome: string }[]
+  atividades: { id: string; nome: string } | { id: string; nome: string }[] | null
+  categorias_atividade: { id: string; nome: string } | { id: string; nome: string }[] | null
 }
 
 function pickFirst<T>(value: T | T[] | null | undefined): T | null {
@@ -44,49 +25,25 @@ function pickFirst<T>(value: T | T[] | null | undefined): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value
 }
 
-function normalizeAtividade(value: RelRow['atividades']): AtividadeNested | null {
-  return pickFirst(value)
-}
-
-function normalizeCategoria(
-  value: AtividadeNested['categorias_atividade']
-): { id: string; nome: string } | null {
-  return pickFirst(value)
-}
-
 async function computeKPI(gaepId: string, filtros: DashboardFiltros): Promise<KPIData> {
   const admin = createAdminClient()
 
-  // Resolve atividade_ids when filtering by category or specific activity
-  let atividadeIds: string[] | null = null
-  if (filtros.atividadeId) {
-    atividadeIds = [filtros.atividadeId]
-  } else if (filtros.categoriaId) {
-    const { data: ats } = await admin
-      .from('atividades')
-      .select('id')
-      .eq('categoria_id', filtros.categoriaId)
-      .is('deleted_at', null)
-    atividadeIds = (ats ?? []).map((a: { id: string }) => a.id)
-    if (atividadeIds.length === 0) {
-      return { totalRegistros: 0, totalMinutos: 0, porCategoria: [], rankingAtividades: [] }
-    }
-  }
-
-  const baseQuery = admin
+  let baseQuery = admin
     .from('relatorios')
     .select(
       `id, hora_inicio, hora_fim, atividade_id,
-       atividades!inner(id, nome, categoria_id, categorias_atividade!inner(id, nome))`
+       atividades!inner(id, nome),
+       categorias_atividade(id, nome)`
     )
     .eq('gaep_id', gaepId)
     .is('deleted_at', null)
     .gte('data', filtros.dataInicio)
     .lte('data', filtros.dataFim)
 
-  const { data } = atividadeIds
-    ? await baseQuery.in('atividade_id', atividadeIds)
-    : await baseQuery
+  if (filtros.categoriaId) baseQuery = baseQuery.eq('categoria_id', filtros.categoriaId) as typeof baseQuery
+  if (filtros.atividadeId) baseQuery = baseQuery.eq('atividade_id', filtros.atividadeId) as typeof baseQuery
+
+  const { data } = await baseQuery
 
   const rows = (data ?? []) as RelRow[]
 
@@ -95,9 +52,9 @@ async function computeKPI(gaepId: string, filtros: DashboardFiltros): Promise<KP
   let totalMinutos = 0
 
   for (const r of rows) {
-    const at = normalizeAtividade(r.atividades)
+    const at = pickFirst(r.atividades)
     if (!at) continue
-    const cat = normalizeCategoria(at.categorias_atividade)
+    const cat = pickFirst(r.categorias_atividade)
     if (!cat) continue
     const mins = minutesBetween(r.hora_inicio, r.hora_fim)
 

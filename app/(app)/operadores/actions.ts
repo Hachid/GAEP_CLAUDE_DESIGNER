@@ -10,12 +10,8 @@ type RelRow = {
   data: string
   hora_inicio: string | null
   hora_fim: string | null
-  atividades: {
-    id: string
-    nome: string
-    categoria_id: string
-    categorias_atividade: { id: string; nome: string }
-  } | null
+  atividades: { id: string; nome: string } | null
+  categorias_atividade: { id: string; nome: string } | null
 }
 
 async function fetchRelatoriosOperador(
@@ -37,7 +33,8 @@ async function fetchRelatoriosOperador(
     .from('relatorios')
     .select(
       `id, data, hora_inicio, hora_fim,
-       atividades!inner(id, nome, categoria_id, categorias_atividade!inner(id, nome))`
+       atividades!inner(id, nome),
+       categorias_atividade(id, nome)`
     )
     .in('id', relIds)
     .gte('data', filtros.dataInicio)
@@ -62,9 +59,9 @@ export async function fetchDesempenhoData(
     let totalMinutos = 0
 
     for (const r of rows) {
-      if (!r.atividades || !r.hora_inicio || !r.hora_fim) continue
+      if (!r.atividades || !r.categorias_atividade || !r.hora_inicio || !r.hora_fim) continue
       const mins = minutesBetween(r.hora_inicio, r.hora_fim)
-      const cat = r.atividades.categorias_atividade
+      const cat = r.categorias_atividade
       const at = r.atividades
 
       totalMinutos += mins

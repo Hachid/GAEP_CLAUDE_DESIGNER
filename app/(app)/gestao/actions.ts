@@ -131,14 +131,13 @@ export async function toggleAtivoOperador(id: string, ativo: boolean): Promise<A
 // ── Atividades ────────────────────────────────────────────────
 
 export async function adicionarAtividade(
-  categoriaId: string,
   nome: string
 ): Promise<{ id?: string; error?: string }> {
   try {
     const { admin } = await getAdminCtx()
     const { data, error } = await admin
       .from('atividades')
-      .insert({ categoria_id: categoriaId, nome: nome.trim(), ativo: true })
+      .insert({ nome: nome.trim(), ativo: true })
       .select('id')
       .single()
     if (error) return { error: error.message }
@@ -420,7 +419,7 @@ export async function importarRelatoriosCsv(csvContent: string): Promise<{
     const [opsRes, catRes, atRes, gaepsRes] = await Promise.all([
       admin.from('operadores').select('id, matricula, gaep_id').is('deleted_at', null),
       admin.from('categorias_atividade').select('id, nome'),
-      admin.from('atividades').select('id, nome, categoria_id').is('deleted_at', null),
+      admin.from('atividades').select('id, nome').is('deleted_at', null),
       admin.from('gaeps').select('id, codigo'),
     ])
 
@@ -431,8 +430,8 @@ export async function importarRelatoriosCsv(csvContent: string): Promise<{
     const gaepByCodigo = new Map((gaepsRes.data ?? []).map((g) => [String(g.codigo).toUpperCase(), String(g.id)]))
     const catByNome = new Map((catRes.data ?? []).map((c) => [String(c.nome).toUpperCase(), String(c.id)]))
     const opByMatricula = new Map((opsRes.data ?? []).map((o) => [String(o.matricula), { id: String(o.id), gaep_id: String(o.gaep_id) }]))
-    const atvByCatNome = new Map(
-      (atRes.data ?? []).map((a) => [`${String(a.categoria_id)}::${String(a.nome).toUpperCase()}`, String(a.id)])
+    const atvByNome = new Map(
+      (atRes.data ?? []).map((a) => [String(a.nome).toUpperCase(), String(a.id)])
     )
 
     let inserted = 0
@@ -480,10 +479,10 @@ export async function importarRelatoriosCsv(csvContent: string): Promise<{
         continue
       }
 
-      const atividadeId = atvByCatNome.get(`${categoriaId}::${atividadeNome}`)
+      const atividadeId = atvByNome.get(atividadeNome)
       if (!atividadeId) {
         skipped += 1
-        errors.push({ line, reason: 'atividade_nome não encontrada para a categoria informada.' })
+        errors.push({ line, reason: 'atividade_nome não encontrada.' })
         continue
       }
 

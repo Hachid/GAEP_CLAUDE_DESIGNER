@@ -64,7 +64,7 @@ export default async function HistoricoPage() {
   const [historicoRes, catsRes, atvsRes] = await Promise.all([
     buscarHistoricoRelatorios(operadorAtual.gaeps.id),
     admin.from('categorias_atividade').select('id, nome').order('nome'),
-    admin.from('atividades').select('id, nome, categoria_id').is('deleted_at', null).order('nome'),
+    admin.from('atividades').select('id, nome').is('deleted_at', null).order('nome'),
   ])
 
   const relatorios = historicoRes.data ?? []

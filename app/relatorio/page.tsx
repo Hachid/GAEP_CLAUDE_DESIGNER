@@ -28,7 +28,6 @@ interface CategoriaRow {
 interface AtividadeRow {
   id: string
   nome: string
-  categoria_id: string
 }
 
 /**
@@ -198,7 +197,7 @@ export default async function RelatorioPage() {
       admin.from('categorias_atividade').select('id, nome').order('nome'),
       admin
         .from('atividades')
-        .select('id, nome, categoria_id')
+        .select('id, nome')
         .is('deleted_at', null)
         .order('nome'),
     ])

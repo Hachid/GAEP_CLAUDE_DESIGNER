@@ -15,30 +15,25 @@ INSERT INTO categorias_atividade (id, nome) VALUES
   ('10000000-0000-0000-0000-000000000002', 'TREINAR'),
   ('10000000-0000-0000-0000-000000000003', 'INSTRUIR');
 
--- Atividades OPERAR
-INSERT INTO atividades (categoria_id, nome) VALUES
-  ('10000000-0000-0000-0000-000000000001', 'POJ'),
-  ('10000000-0000-0000-0000-000000000001', 'Apoio e Contributo'),
-  ('10000000-0000-0000-0000-000000000001', 'Patrulha'),
-  ('10000000-0000-0000-0000-000000000001', 'Escolta'),
-  ('10000000-0000-0000-0000-000000000001', 'Segurança VIP'),
-  ('10000000-0000-0000-0000-000000000001', 'Abordagem');
-
--- Atividades TREINAR
-INSERT INTO atividades (categoria_id, nome) VALUES
-  ('10000000-0000-0000-0000-000000000002', 'Atividade Lúdica'),
-  ('10000000-0000-0000-0000-000000000002', 'Atletismo Prime'),
-  ('10000000-0000-0000-0000-000000000002', 'CDR'),
-  ('10000000-0000-0000-0000-000000000002', 'Luta Policial'),
-  ('10000000-0000-0000-0000-000000000002', 'Arremesso/Tiro'),
-  ('10000000-0000-0000-0000-000000000002', 'Rádio Comunicações');
-
--- Atividades INSTRUIR
-INSERT INTO atividades (categoria_id, nome) VALUES
-  ('10000000-0000-0000-0000-000000000003', 'Instrução Técnica'),
-  ('10000000-0000-0000-0000-000000000003', 'Palestra'),
-  ('10000000-0000-0000-0000-000000000003', 'Curso Externo'),
-  ('10000000-0000-0000-0000-000000000003', 'Nivelamento');
+-- Atividades (universais — disponíveis para qualquer categoria)
+INSERT INTO atividades (nome) VALUES
+  ('Escolta'),
+  ('Algemamento'),
+  ('Patrulhamento'),
+  ('Abordagem'),
+  ('CQB'),
+  ('Luta Policial'),
+  ('Armamento e Tiro'),
+  ('Drone'),
+  ('Intervenção'),
+  ('TTML'),
+  ('Administrativo'),
+  ('Segurança de Autoridades'),
+  ('PDU'),
+  ('Outros'),
+  ('Atividade Física'),
+  ('Apoio a Unidade'),
+  ('Rádio Comunicação');
 
 -- Tipos de Missão
 INSERT INTO tipos_missao (tipo, locais, valor, vigencia) VALUES

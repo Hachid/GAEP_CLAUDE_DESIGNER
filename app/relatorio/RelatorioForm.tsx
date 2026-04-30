@@ -23,7 +23,6 @@ interface Categoria {
 interface Atividade {
   id: string
   nome: string
-  categoria_id: string
 }
 
 interface RelatorioFormProps {
@@ -119,7 +118,6 @@ export function RelatorioForm({
   }, [data])
 
   // ── Derivados ─────────────────────────────────────────────────
-  const atividadesFiltradas = atividades.filter((a) => a.categoria_id === categoriaId)
   const categoriaSelecionada = categorias.find((c) => c.id === categoriaId)
   const atividadeSelecionada = atividades.find((a) => a.id === atividadeId)
   const equipeNomes = operadores.filter((o) => equipe.includes(o.id)).map((o) => o.nome)
@@ -291,10 +289,9 @@ export function RelatorioForm({
             style={inputStyle}
             value={atividadeId}
             onChange={(e) => setAtividadeId(e.target.value)}
-            disabled={!categoriaId}
           >
-            <option value="">{categoriaId ? 'Selecione...' : 'Escolha a categoria'}</option>
-            {atividadesFiltradas.map((a) => (
+            <option value="">Selecione...</option>
+            {atividades.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.nome}
               </option>
