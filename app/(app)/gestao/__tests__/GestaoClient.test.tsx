@@ -11,6 +11,7 @@ vi.mock('../actions', () => ({
   removerAtividade: vi.fn().mockResolvedValue({}),
   adicionarFeriado: vi.fn().mockResolvedValue({ id: 'f-new' }),
   removerFeriado: vi.fn().mockResolvedValue({}),
+  salvarDiasUteisMes: vi.fn().mockResolvedValue({}),
   salvarConfigIA: vi.fn().mockResolvedValue({}),
   salvarConfigRelatorio: vi.fn().mockResolvedValue({}),
   testarPromptIA: vi.fn().mockResolvedValue({ resultado: 'ok' }),
@@ -27,6 +28,7 @@ function baseData(overrides: Partial<GestaoData> = {}): GestaoData {
     categorias: [{ id: 'cat-1', nome: 'OPERAR' }],
     atividades: [],
     feriados: [],
+    diasUteisMes: [],
     configIA: {
       id: null,
       modelo: 'gpt-4o',

@@ -8,6 +8,7 @@ import type {
   OperadorRow,
   AtividadeRow,
   FeriadoRow,
+  DiasUteisMesRow,
   DiariaRow,
   GaepRow,
   ConfigRelatorioUIData,
@@ -111,7 +112,7 @@ export default async function GestaoPage() {
   }
 
   // ── 3. Busca de dados em paralelo ─────────────────────────────
-  const [opsData, catRes, atRes, ferRes, iaRes, relatorioCfgRes, diarRes, gaepsRes] = await Promise.all([
+  const [opsData, catRes, atRes, ferRes, diasUteisRes, iaRes, relatorioCfgRes, diarRes, gaepsRes] = await Promise.all([
     listarOperadoresGestao(gaep.id),
     admin.from('categorias_atividade').select('id, nome').order('nome'),
 
@@ -126,6 +127,12 @@ export default async function GestaoPage() {
       .select('id, data, descricao')
       .eq('gaep_id', gaep.id)
       .order('data'),
+
+    admin
+      .from('gaep_dias_uteis')
+      .select('id, referencia_mes, dias_uteis')
+      .eq('gaep_id', gaep.id)
+      .order('referencia_mes', { ascending: false }),
 
     admin
       .from('config_ia')
@@ -154,6 +161,11 @@ export default async function GestaoPage() {
     categorias: (catRes.data ?? []) as { id: string; nome: string }[],
     atividades: (atRes.data ?? []) as AtividadeRow[],
     feriados: (ferRes.data ?? []) as FeriadoRow[],
+    diasUteisMes: (diasUteisRes.data ?? []).map((d) => ({
+      id: String(d.id),
+      referenciaMes: String(d.referencia_mes),
+      diasUteis: Number(d.dias_uteis),
+    })) as DiasUteisMesRow[],
     configIA: iaRes.data
       ? {
           id: String(iaRes.data.id),

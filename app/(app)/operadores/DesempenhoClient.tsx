@@ -206,6 +206,8 @@ export function DesempenhoClient({ operadores, operadorInicialId }: Props) {
             dias={folha}
             totalMinutos={kpi.totalMinutos}
             totalRegistros={kpi.totalRegistros}
+            cargaHorariaPrevistaMinutos={kpi.cargaHorariaPrevistaMinutos}
+            saldoMinutos={kpi.saldoMinutos}
           />
         </div>
       )}

@@ -46,11 +46,29 @@ async function fetchRelatoriosOperador(
   return (data ?? []) as unknown as RelRow[]
 }
 
+function extrairMesRef(dataISO: string): string {
+  return dataISO.slice(0, 7)
+}
+
+function minutosCargaPorDiasUteis(diasUteis: number): number {
+  return Math.max(0, Math.round(diasUteis) * 7 * 60)
+}
+
 export async function fetchDesempenhoData(
   operadorId: string,
   filtros: DesempenhoFiltros
 ): Promise<{ data: DesempenhoData | null; error: string | null }> {
   try {
+    const admin = createAdminClient()
+    const { data: operador } = await admin
+      .from('operadores')
+      .select('gaep_id')
+      .eq('id', operadorId)
+      .maybeSingle()
+    if (!operador?.gaep_id) {
+      return { data: null, error: 'Operador não encontrado para cálculo de carga horária.' }
+    }
+
     const rows = await fetchRelatoriosOperador(operadorId, filtros)
 
     const catMap = new Map<string, CategoriaStat>()
@@ -109,9 +127,28 @@ export async function fetchDesempenhoData(
     const kpi: KPIData = {
       totalRegistros: rows.length,
       totalMinutos,
+      cargaHorariaPrevistaMinutos: 0,
+      saldoMinutos: totalMinutos,
       porCategoria: [...catMap.values()].sort((a, b) => b.totalMinutos - a.totalMinutos),
       rankingAtividades: [...atMap.values()].sort((a, b) => b.totalMinutos - a.totalMinutos),
       rankingOperadores: [],
+    }
+
+    // Para período mensal, usa os dias úteis cadastrados manualmente para o mês.
+    if (filtros.dataInicio.slice(0, 7) === filtros.dataFim.slice(0, 7)) {
+      const referenciaMes = extrairMesRef(filtros.dataInicio)
+      const { data: diasUteisCfg } = await admin
+        .from('gaep_dias_uteis')
+        .select('dias_uteis')
+        .eq('gaep_id', String(operador.gaep_id))
+        .eq('referencia_mes', referenciaMes)
+        .maybeSingle()
+
+      if (typeof diasUteisCfg?.dias_uteis === 'number') {
+        const cargaHorariaPrevistaMinutos = minutosCargaPorDiasUteis(diasUteisCfg.dias_uteis)
+        kpi.cargaHorariaPrevistaMinutos = cargaHorariaPrevistaMinutos
+        kpi.saldoMinutos = totalMinutos - cargaHorariaPrevistaMinutos
+      }
     }
 
     const folha: FolhaDia[] = [...diaMap.entries()]

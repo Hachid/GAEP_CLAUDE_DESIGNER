@@ -32,6 +32,8 @@ export type OperadorStat = {
 export type KPIData = {
   totalRegistros: number
   totalMinutos: number
+  cargaHorariaPrevistaMinutos?: number
+  saldoMinutos?: number
   porCategoria: CategoriaStat[]
   rankingAtividades: AtividadeStat[]
   rankingOperadores: OperadorStat[]

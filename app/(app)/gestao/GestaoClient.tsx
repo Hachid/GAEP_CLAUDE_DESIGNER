@@ -11,6 +11,7 @@ import {
   removerAtividade,
   adicionarFeriado,
   removerFeriado,
+  salvarDiasUteisMes,
   salvarConfigIA,
   salvarConfigRelatorio,
   salvarTimbradoBase64,
@@ -53,6 +54,12 @@ export interface FeriadoRow {
   id: string
   data: string
   descricao: string
+}
+
+export interface DiasUteisMesRow {
+  id: string
+  referenciaMes: string
+  diasUteis: number
 }
 
 export interface ConfigIAData {
@@ -120,6 +127,7 @@ export interface GestaoData {
   categorias: { id: string; nome: string }[]
   atividades: AtividadeRow[]
   feriados: FeriadoRow[]
+  diasUteisMes: DiasUteisMesRow[]
   configIA: ConfigIAData
   configRelatorio: ConfigRelatorioUIData
   diarias: DiariaRow[]
@@ -973,10 +981,23 @@ function TabAtividades({
 
 // ── Tab: Feriados ─────────────────────────────────────────────
 
-function TabFeriados({ gaepId, initial }: { gaepId: string; initial: FeriadoRow[] }) {
+function TabFeriados({
+  gaepId,
+  initial,
+  initialDiasUteisMes,
+}: {
+  gaepId: string
+  initial: FeriadoRow[]
+  initialDiasUteisMes: DiasUteisMesRow[]
+}) {
   const [feriados, setFeriados] = useState<FeriadoRow[]>(initial)
+  const [diasUteisMes, setDiasUteisMes] = useState<DiasUteisMesRow[]>(initialDiasUteisMes)
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState({ data: '', descricao: '' })
+  const [formDiasUteis, setFormDiasUteis] = useState(() => {
+    const hoje = new Date()
+    return { referenciaMes: `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`, diasUteis: '22' }
+  })
   const [toast, setToast] = useState('')
   const [pending, startTransition] = useTransition()
 
@@ -1010,6 +1031,29 @@ function TabFeriados({ gaepId, initial }: { gaepId: string; initial: FeriadoRow[
     })
   }
 
+  function salvarDiasUteis() {
+    const referenciaMes = formDiasUteis.referenciaMes.trim()
+    const diasUteis = Number(formDiasUteis.diasUteis)
+    if (!/^\d{4}-\d{2}$/.test(referenciaMes) || !Number.isFinite(diasUteis)) return
+    startTransition(async () => {
+      const res = await salvarDiasUteisMes(gaepId, referenciaMes, diasUteis)
+      if (res.error) { showToast(`❌ ${res.error}`); return }
+      setDiasUteisMes((prev) => {
+        const next = [...prev]
+        const idx = next.findIndex((r) => r.referenciaMes === referenciaMes)
+        const row: DiasUteisMesRow = {
+          id: idx >= 0 ? next[idx].id : `${referenciaMes}-${gaepId}`,
+          referenciaMes,
+          diasUteis: Math.max(0, Math.min(31, Math.round(diasUteis))),
+        }
+        if (idx >= 0) next[idx] = row
+        else next.push(row)
+        return next.sort((a, b) => b.referenciaMes.localeCompare(a.referenciaMes))
+      })
+      showToast('✅ Dias úteis do mês salvos!')
+    })
+  }
+
   return (
     <div>
       <Toast msg={toast} />
@@ -1026,6 +1070,57 @@ function TabFeriados({ gaepId, initial }: { gaepId: string; initial: FeriadoRow[
       >
         📌 Feriados afetam o cálculo da <strong>carga horária de expediente</strong> (7h × dias úteis do mês).
       </div>
+      <AdminCard>
+        <SectionHeader title="Dias úteis por mês (base de saldo)" />
+        <div style={{ padding: 16, borderBottom: '1px solid #f1f5f9' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr auto', gap: 10 }}>
+            <input
+              type="month"
+              value={formDiasUteis.referenciaMes}
+              onChange={(e) => setFormDiasUteis((f) => ({ ...f, referenciaMes: e.target.value }))}
+              style={mInput}
+            />
+            <input
+              type="number"
+              min={0}
+              max={31}
+              value={formDiasUteis.diasUteis}
+              onChange={(e) => setFormDiasUteis((f) => ({ ...f, diasUteis: e.target.value }))}
+              style={mInput}
+              placeholder="Dias úteis"
+            />
+            <button
+              onClick={salvarDiasUteis}
+              disabled={pending}
+              style={{
+                padding: '8px 12px',
+                background: pending ? '#94a3b8' : '#1a237e',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                fontWeight: 700,
+                cursor: pending ? 'not-allowed' : 'pointer',
+              }}
+            >
+              💾 Salvar
+            </button>
+          </div>
+          <div style={{ marginTop: 10, fontSize: '0.75rem', color: '#64748b' }}>
+            Esses valores alimentam o cálculo de carga horária prevista (7h × dias úteis) e saldo mensal no desempenho do operador.
+          </div>
+          {diasUteisMes.length > 0 && (
+            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
+              {diasUteisMes.slice(0, 6).map((d) => (
+                <div key={d.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 10px', background: '#f8fafc' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>{d.referenciaMes}</div>
+                  <div style={{ fontSize: '0.88rem', color: '#1e293b', fontWeight: 800 }}>{d.diasUteis} dias úteis</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </AdminCard>
+
       <AdminCard>
         <SectionHeader
           title={`Feriados ${new Date().getFullYear()} (${feriados.length})`}
@@ -2412,7 +2507,7 @@ export function GestaoClient({ data }: { data: GestaoData }) {
     {
       id: 'feriados',
       label: 'Feriados',
-      comp: <TabFeriados gaepId={data.gaep.id} initial={data.feriados} />,
+      comp: <TabFeriados gaepId={data.gaep.id} initial={data.feriados} initialDiasUteisMes={data.diasUteisMes} />,
     },
     {
       id: 'ia',

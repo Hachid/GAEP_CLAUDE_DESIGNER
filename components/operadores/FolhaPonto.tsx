@@ -8,15 +8,18 @@ type Props = {
   dias: FolhaDia[]
   totalMinutos: number
   totalRegistros: number
+  cargaHorariaPrevistaMinutos?: number
+  saldoMinutos?: number
 }
 
-export function FolhaPonto({ dias, totalMinutos, totalRegistros }: Props) {
+export function FolhaPonto({ dias, totalMinutos, totalRegistros, cargaHorariaPrevistaMinutos, saldoMinutos }: Props) {
+  const saldoCor = (saldoMinutos ?? 0) >= 0 ? '#16a34a' : '#ef4444'
   return (
     <>
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          gridTemplateColumns: '1fr 1fr 1fr',
           gap: 12,
           marginBottom: 20,
         }}
@@ -73,6 +76,36 @@ export function FolhaPonto({ dias, totalMinutos, totalRegistros }: Props) {
           </div>
           <div style={{ fontSize: '2rem', fontWeight: 800, color: '#f97316', marginTop: 6 }}>
             {formatMinutos(totalMinutos)}
+          </div>
+        </div>
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 12,
+            padding: 18,
+            textAlign: 'center',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
+            border: '1px solid #e2e8f0',
+            borderTop: `4px solid ${saldoCor}`,
+          }}
+        >
+          <div
+            style={{
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              color: '#94a3b8',
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+              marginBottom: 4,
+            }}
+          >
+            Saldo do Mês
+          </div>
+          <div style={{ fontSize: '1.3rem', fontWeight: 800, color: saldoCor, marginTop: 6 }}>
+            {saldoMinutos === undefined ? '—' : `${saldoMinutos >= 0 ? '+' : ''}${formatMinutos(Math.abs(saldoMinutos))}`}
+          </div>
+          <div style={{ marginTop: 6, fontSize: '0.68rem', color: '#94a3b8' }}>
+            Previsto: {cargaHorariaPrevistaMinutos === undefined ? '—' : formatMinutos(cargaHorariaPrevistaMinutos)}
           </div>
         </div>
       </div>

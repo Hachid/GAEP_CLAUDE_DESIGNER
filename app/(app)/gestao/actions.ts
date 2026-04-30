@@ -483,6 +483,37 @@ export async function removerFeriado(id: string): Promise<ActionResult> {
   }
 }
 
+export async function salvarDiasUteisMes(
+  gaepId: string,
+  referenciaMes: string,
+  diasUteis: number
+): Promise<ActionResult> {
+  try {
+    const { admin } = await getAdminCtx()
+    const referencia = referenciaMes.trim()
+    const dias = Math.max(0, Math.min(31, Math.round(Number(diasUteis) || 0)))
+    if (!/^\d{4}-\d{2}$/.test(referencia)) {
+      return { error: 'Referência do mês inválida. Use o formato AAAA-MM.' }
+    }
+
+    const { error } = await admin.from('gaep_dias_uteis').upsert(
+      {
+        gaep_id: gaepId,
+        referencia_mes: referencia,
+        dias_uteis: dias,
+      },
+      { onConflict: 'gaep_id,referencia_mes' }
+    )
+
+    if (error) return { error: error.message }
+    revalidatePath('/gestao')
+    revalidatePath('/operadores')
+    return {}
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
 // ── Config IA ─────────────────────────────────────────────────
 
 export async function salvarConfigIA(
