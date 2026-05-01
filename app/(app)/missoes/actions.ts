@@ -173,9 +173,8 @@ export async function editarMissao(input: {
       motivo: motivoTrim,
     }
 
-    void admin
-      .from('audit_log')
-      .insert({
+    void (async () => {
+      const { error: auditErr } = await admin.from('audit_log').insert({
         gaep_id: gaepId,
         operador_id: editorId,
         acao: 'UPDATE',
@@ -192,8 +191,8 @@ export async function editarMissao(input: {
         dados_depois: dadosDepois,
         ip,
       })
-      .then(() => {})
-      .catch((err: unknown) => console.error('[editarMissao] audit_log:', err))
+      if (auditErr) console.error('[editarMissao] audit_log:', auditErr)
+    })()
 
     revalidatePath('/missoes')
     return {}

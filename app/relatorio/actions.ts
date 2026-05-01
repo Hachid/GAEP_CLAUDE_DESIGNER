@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { headers } from 'next/headers'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 
 /** Campos necessários para registrar um relatório operacional. */
 export interface SalvarRelatorioInput {
@@ -138,9 +138,8 @@ export async function salvarRelatorio(
   }
 
   // ── 5. Audit log (fire-and-forget — nunca bloqueia o retorno) ─
-  admin
-    .from('audit_log')
-    .insert({
+  void (async () => {
+    const { error: auditErr } = await admin.from('audit_log').insert({
       gaep_id: input.gaepId,
       operador_id: input.relatoristId,
       acao: 'INSERT',
@@ -155,10 +154,11 @@ export async function salvarRelatorio(
       },
       ip,
     })
-    .then(() => {})
-    .catch((err: unknown) => console.error('[salvarRelatorio] Erro no audit_log:', err))
+    if (auditErr) console.error('[salvarRelatorio] Erro no audit_log:', auditErr)
+  })()
 
   revalidatePath('/relatorio')
+  revalidateTag('relatorios-kpi')
   return { id: relatorioId }
 }
 
@@ -225,7 +225,9 @@ export async function buscarRelatorio(
 
   const { data: rel, error: relErr } = await admin
     .from('relatorios')
-    .select('*')
+    .select(
+      'id, data, hora_inicio, hora_fim, horas_totais, categoria_id, atividade_id, relatorista_id, descricao_bruta, descricao_revisada, ocorrencias, fotos_urls, outros_integrantes, versao, created_at, updated_at'
+    )
     .eq('id', id)
     .is('deleted_at', null)
     .single()
@@ -253,32 +255,28 @@ export async function buscarRelatorio(
       .order('versao', { ascending: false }),
   ])
 
-  // Busca nomes dos participantes
+  // IDs para lookups de nomes — calculados primeiro, queries em paralelo
   const participanteIds = ((partRes.data ?? []) as Array<{ operador_id: string }>).map(
     (p) => p.operador_id
   )
-  let participantes: Array<{ id: string; nome: string }> = []
-  if (participanteIds.length > 0) {
-    const { data: ops } = await admin
-      .from('operadores')
-      .select('id, nome')
-      .in('id', participanteIds)
-    participantes = ((ops ?? []) as Array<{ id: string; nome: string }>).map((o) => ({
-      id: o.id,
-      nome: o.nome,
-    }))
-  }
-
-  // Busca nomes dos editores das versões
   const versoesBruto = ((verRes.data ?? []) as Array<Record<string, unknown>>)
   const editorIds = [...new Set(versoesBruto.map((v) => v.editado_por_id as string).filter(Boolean))]
-  let editorMap: Record<string, string> = {}
-  if (editorIds.length > 0) {
-    const { data: eds } = await admin.from('operadores').select('id, nome').in('id', editorIds)
-    editorMap = Object.fromEntries(
-      ((eds ?? []) as Array<{ id: string; nome: string }>).map((e) => [e.id, e.nome])
-    )
-  }
+
+  const [partOpsRes, edOpsRes] = await Promise.all([
+    participanteIds.length > 0
+      ? admin.from('operadores').select('id, nome').in('id', participanteIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; nome: string }> }),
+    editorIds.length > 0
+      ? admin.from('operadores').select('id, nome').in('id', editorIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; nome: string }> }),
+  ])
+
+  const participantes = ((partOpsRes.data ?? []) as Array<{ id: string; nome: string }>).map(
+    (o) => ({ id: o.id, nome: o.nome })
+  )
+  const editorMap: Record<string, string> = Object.fromEntries(
+    ((edOpsRes.data ?? []) as Array<{ id: string; nome: string }>).map((e) => [e.id, e.nome])
+  )
 
   const versoes = versoesBruto.map((v) => ({
     id: v.id as string,
@@ -339,6 +337,7 @@ export async function buscarHistoricoRelatorios(
     .is('deleted_at', null)
     .order('data', { ascending: false })
     .order('created_at', { ascending: false })
+    .limit(200)
 
   if (rowsErr) return { error: rowsErr.message }
 
@@ -461,6 +460,7 @@ export async function editarRelatorio(
 
   revalidatePath(`/relatorio/${input.id}`)
   revalidatePath('/relatorio/historico')
+  revalidateTag('relatorios-kpi')
   return {}
 }
 
@@ -498,5 +498,6 @@ export async function excluirRelatorio(input: {
   if (delErr) return { error: delErr.message }
 
   revalidatePath('/relatorio/historico')
+  revalidateTag('relatorios-kpi')
   return {}
 }

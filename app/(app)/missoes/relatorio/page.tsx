@@ -27,7 +27,10 @@ type MissaoRow = {
   observacao: string | null
   created_at: string
   updated_at: string | null
-  operadores: { nome_guerra: string; numerica: string | null } | null
+  operadores:
+    | { nome_guerra: string; numerica: string | null }
+    | Array<{ nome_guerra: string; numerica: string | null }>
+    | null
 }
 
 type PrintMargins = { top: number; right: number; bottom: number; left: number }
@@ -108,6 +111,7 @@ export default async function MissoesRelatorioPage({ searchParams }: Props) {
     subtituloEstilo: { fontFamily: 'Times New Roman', fontColor: '#000000', align: 'center', indent: 0, lineHeight: 1.3, fontSize: 11 },
     descricaoEstilo: { fontFamily: 'Times New Roman', fontColor: '#111827', align: 'justify', indent: 12, lineHeight: 1.8, fontSize: 11 },
     rodapeEstilo: { fontFamily: 'Times New Roman', fontColor: '#6b7280', align: 'right', indent: 0, lineHeight: 1.3, fontSize: 8 },
+    printMargins,
   }
 
   const withUpdatedAt = await admin
@@ -116,6 +120,13 @@ export default async function MissoesRelatorioPage({ searchParams }: Props) {
     .eq('gaep_id', operadorAtual.gaep_id)
     .is('deleted_at', null)
     .order('created_at', { ascending: true })
+
+  function normalizeOperador(
+    operador: MissaoRow['operadores']
+  ): { nome_guerra: string; numerica: string | null } | null {
+    if (!operador) return null
+    return Array.isArray(operador) ? (operador[0] ?? null) : operador
+  }
 
   let missoesRows: MissaoRow[] = []
   if (!withUpdatedAt.error) {
@@ -127,11 +138,19 @@ export default async function MissoesRelatorioPage({ searchParams }: Props) {
       .eq('gaep_id', operadorAtual.gaep_id)
       .is('deleted_at', null)
       .order('created_at', { ascending: true })
-    missoesRows = ((fallback.data ?? []) as Array<Omit<MissaoRow, 'updated_at'> & { operadores: { nome_guerra: string } | null }>).map((m) => ({
-      ...m,
-      updated_at: null,
-      operadores: m.operadores ? { ...m.operadores, numerica: null } : null,
-    }))
+    missoesRows = (
+      (fallback.data ?? []) as Array<
+        Omit<MissaoRow, 'updated_at' | 'operadores'> & { operadores: { nome_guerra: string } | Array<{ nome_guerra: string }> | null }
+      >
+    ).map((m) => {
+      const op = m.operadores
+      const first = Array.isArray(op) ? (op[0] ?? null) : op
+      return {
+        ...m,
+        updated_at: null,
+        operadores: first ? { ...first, numerica: null } : null,
+      }
+    })
   }
 
   const groupMap = new Map<string, {
@@ -153,6 +172,7 @@ export default async function MissoesRelatorioPage({ searchParams }: Props) {
 
   let ultimaAtualizacao: string | null = null
   for (const m of missoesRows) {
+    const operador = normalizeOperador(m.operadores)
     const id = String(m.operador_id)
     const existing = groupMap.get(id)
     const dataRef = m.updated_at ?? m.created_at
@@ -174,8 +194,8 @@ export default async function MissoesRelatorioPage({ searchParams }: Props) {
     } else {
       groupMap.set(id, {
         operadorId: id,
-        operadorNome: m.operadores?.nome_guerra ?? '—',
-        operadorNumerica: m.operadores?.numerica ?? null,
+        operadorNome: operador?.nome_guerra ?? '—',
+        operadorNumerica: operador?.numerica ?? null,
         totalMisssoes: 1,
         totalValor: Number(m.valor_total),
         missoes: [{

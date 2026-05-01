@@ -167,21 +167,31 @@ export default async function MissoesPage() {
     valor_total: number
     observacao: string | null
     created_at: string
-    operadores: { id: string; nome_guerra: string } | null
+    operadores: { id: string; nome_guerra: string } | Array<{ id: string; nome_guerra: string }> | null
   }
 
-  const missoes: MissaoRow[] = ((missoesRes.data ?? []) as MissaoRaw[]).map((m) => ({
-    id: m.id,
-    operadorId: m.operador_id,
-    operadorNome: m.operadores?.nome_guerra ?? '—',
-    tipoMissaoId: m.tipo_missao_id,
-    tipoSnapshot: m.tipo_snapshot,
-    qtd: Number(m.qtd),
-    valorUnitarioSnapshot: Number(m.valor_unitario_snapshot),
-    valorTotal: Number(m.valor_total),
-    observacao: m.observacao,
-    createdAt: m.created_at,
-  }))
+  function normalizeOperador(
+    operador: MissaoRaw['operadores']
+  ): { id: string; nome_guerra: string } | null {
+    if (!operador) return null
+    return Array.isArray(operador) ? (operador[0] ?? null) : operador
+  }
+
+  const missoes: MissaoRow[] = ((missoesRes.data ?? []) as MissaoRaw[]).map((m) => {
+    const operador = normalizeOperador(m.operadores)
+    return {
+      id: m.id,
+      operadorId: m.operador_id,
+      operadorNome: operador?.nome_guerra ?? '—',
+      tipoMissaoId: m.tipo_missao_id,
+      tipoSnapshot: m.tipo_snapshot,
+      qtd: Number(m.qtd),
+      valorUnitarioSnapshot: Number(m.valor_unitario_snapshot),
+      valorTotal: Number(m.valor_total),
+      observacao: m.observacao,
+      createdAt: m.created_at,
+    }
+  })
 
   // ── 5. Render ─────────────────────────────────────────────────
   return (

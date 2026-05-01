@@ -7,6 +7,19 @@ interface DescricaoMicProps {
   onChange: (value: string) => void
 }
 
+interface SpeechRecognitionLike {
+  lang: string
+  interimResults: boolean
+  continuous: boolean
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike
+type BrowserWindow = Window & { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor }
+
 /**
  * Textarea com botão de microfone flutuante para ditado por voz.
  *
@@ -16,7 +29,7 @@ interface DescricaoMicProps {
  */
 export function DescricaoMic({ value, onChange }: DescricaoMicProps) {
   const [gravando, setGravando] = useState(false)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
 
   useEffect(() => {
     return () => {
@@ -31,11 +44,8 @@ export function DescricaoMic({ value, onChange }: DescricaoMicProps) {
       return
     }
 
-    const SR =
-      (typeof window !== 'undefined' &&
-        (window.SpeechRecognition ??
-          (window as Window & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition)) ||
-      null
+    const browserWindow = typeof window !== 'undefined' ? (window as BrowserWindow) : null
+    const SR = browserWindow?.SpeechRecognition ?? browserWindow?.webkitSpeechRecognition ?? null
 
     if (!SR) return
 
@@ -44,7 +54,7 @@ export function DescricaoMic({ value, onChange }: DescricaoMicProps) {
     rec.interimResults = false
     rec.continuous = false
 
-    rec.onresult = (e: SpeechRecognitionEvent) => {
+    rec.onresult = (e) => {
       const transcript = e.results[0][0].transcript
       onChange(value ? `${value} ${transcript}` : transcript)
     }

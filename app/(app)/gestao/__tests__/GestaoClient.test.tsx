@@ -1,7 +1,32 @@
+import type { ReactNode } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { GestaoClient, type GestaoData } from '../GestaoClient'
+import { VariavelMesProvider } from '@/lib/variavelMes'
+import { GestaoClient, type GestaoData, type OperadorRow } from '../GestaoClient'
+
+const navMock = vi.hoisted(() => {
+  const searchParams = new URLSearchParams('tab=efetivo')
+  return {
+    searchParams,
+    setGestaoTab(tab: string) {
+      searchParams.delete('tab')
+      searchParams.set('tab', tab)
+    },
+    resetGestaoTab() {
+      searchParams.delete('tab')
+      searchParams.set('tab', 'efetivo')
+    },
+  }
+})
+
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => navMock.searchParams,
+}))
+
+function renderGestao(node: ReactNode) {
+  return render(<VariavelMesProvider>{node}</VariavelMesProvider>)
+}
 
 vi.mock('../actions', () => ({
   criarOperador: vi.fn().mockResolvedValue({ id: 'new-id' }),
@@ -38,11 +63,15 @@ function baseData(overrides: Partial<GestaoData> = {}): GestaoData {
     configRelatorio: {
       id: null,
       tituloTexto: 'RELATÓRIO OPERACIONAL',
+      subtituloTexto: '',
       descricaoTexto: '',
       rodapeTexto: '{{GAEP}}',
       tituloEstilo: { fontFamily: 'Times New Roman', fontColor: '#000000', align: 'center', indent: 0, lineHeight: 1.4 },
+      subtituloEstilo: { fontFamily: 'Times New Roman', fontColor: '#111827', align: 'center', indent: 0, lineHeight: 1.4 },
       descricaoEstilo: { fontFamily: 'Times New Roman', fontColor: '#111827', align: 'justify', indent: 12, lineHeight: 1.8 },
       rodapeEstilo: { fontFamily: 'Times New Roman', fontColor: '#6b7280', align: 'right', indent: 0, lineHeight: 1.3 },
+      timbradoUrl: null,
+      printMargins: { top: 1.5, right: 1.5, bottom: 1.5, left: 1.5 },
     },
     diarias: [],
     gaeps: [],
@@ -50,45 +79,60 @@ function baseData(overrides: Partial<GestaoData> = {}): GestaoData {
   }
 }
 
-function tabStripButtons() {
-  return screen.getAllByRole('button').filter((btn) => {
-    const t = btn.textContent ?? ''
-    return /^(👮|📋|📅|🤖|💰|🌐)\s/.test(t)
-  })
+function makeOperador(partial: Partial<OperadorRow> & Pick<OperadorRow, 'id' | 'nome' | 'matricula' | 'perfil'>): OperadorRow {
+  return {
+    id: partial.id,
+    nome: partial.nome,
+    nome_completo: partial.nome_completo ?? null,
+    matricula: partial.matricula,
+    perfil: partial.perfil,
+    equipe: partial.equipe ?? null,
+    ativo: partial.ativo ?? true,
+    email_funcional: partial.email_funcional ?? null,
+    numerica: partial.numerica ?? null,
+    tipo_sanguineo: partial.tipo_sanguineo ?? null,
+    alergia: partial.alergia ?? null,
+    contato_emergencia: partial.contato_emergencia ?? null,
+    nome_contato_emergencia: partial.nome_contato_emergencia ?? null,
+    plano_saude: partial.plano_saude ?? null,
+    numero_carteirinha: partial.numero_carteirinha ?? null,
+    cpf: partial.cpf ?? null,
+    email: partial.email ?? null,
+  }
 }
 
 describe('GestaoClient', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    navMock.resetGestaoTab()
   })
 
-  it('com perfil ADMIN renderiza 5 abas (sem GAEPs)', () => {
-    render(<GestaoClient data={baseData()} />)
-    expect(tabStripButtons()).toHaveLength(5)
-    expect(screen.queryByRole('button', { name: /🌐\s*GAEPs/ })).not.toBeInTheDocument()
+  it('com perfil ADMIN exibe aba Efetivo por padrão (tab=efetivo)', () => {
+    renderGestao(<GestaoClient data={baseData()} />)
+    expect(screen.getByText(/Operadores/)).toBeInTheDocument()
   })
 
-  it('com perfil SUPER_ADMIN renderiza 6 abas (com GAEPs)', () => {
-    render(
+  it('com perfil SUPER_ADMIN exibe aba GAEPs quando tab=gaeps', () => {
+    navMock.setGestaoTab('gaeps')
+    renderGestao(
       <GestaoClient
         data={baseData({
           operadorAtual: { id: 'op-sa', nome: 'Super', perfil: 'SUPER_ADMIN' },
         })}
       />
     )
-    expect(tabStripButtons()).toHaveLength(6)
-    expect(screen.getByRole('button', { name: /🌐\s*GAEPs/ })).toBeInTheDocument()
+    expect(screen.getByText(/Unidades GAEP/)).toBeInTheDocument()
   })
 
   it('badge ADMIN: cor #1a237e e ícone ⚙️', () => {
-    render(<GestaoClient data={baseData()} />)
+    renderGestao(<GestaoClient data={baseData()} />)
     const title = screen.getByText(/⚙️ ADMIN — GAEP-CAT/)
     expect(title).toBeInTheDocument()
     expect(title).toHaveStyle({ color: '#1a237e' })
   })
 
   it('badge SUPER_ADMIN: cor #7c3aed e ícone 🔑', () => {
-    render(
+    renderGestao(
       <GestaoClient
         data={baseData({
           operadorAtual: { id: 'op-sa', nome: 'Super', perfil: 'SUPER_ADMIN' },
@@ -102,26 +146,10 @@ describe('GestaoClient', () => {
 
   it('TabEfetivo lista operadores vindos das props', () => {
     const operadores = [
-      {
-        id: '1',
-        nome: 'Ana Silva',
-        matricula: '101',
-        perfil: 'OPERADOR',
-        equipe: 'Alpha',
-        ativo: true,
-        email_funcional: null,
-      },
-      {
-        id: '2',
-        nome: 'Bruno Costa',
-        matricula: '102',
-        perfil: 'SUPERVISOR',
-        equipe: 'Bravo',
-        ativo: true,
-        email_funcional: null,
-      },
+      makeOperador({ id: '1', nome: 'Ana Silva', matricula: '101', perfil: 'OPERADOR', equipe: 'Alpha' }),
+      makeOperador({ id: '2', nome: 'Bruno Costa', matricula: '102', perfil: 'SUPERVISOR', equipe: 'Bravo' }),
     ]
-    render(<GestaoClient data={baseData({ operadores })} />)
+    renderGestao(<GestaoClient data={baseData({ operadores })} />)
     expect(screen.getByText('Ana Silva')).toBeInTheDocument()
     expect(screen.getByText('Bruno Costa')).toBeInTheDocument()
   })
@@ -129,26 +157,10 @@ describe('GestaoClient', () => {
   it('TabEfetivo: busca filtra por nome', async () => {
     const user = userEvent.setup()
     const operadores = [
-      {
-        id: '1',
-        nome: 'Carlos Alfa',
-        matricula: '201',
-        perfil: 'OPERADOR',
-        equipe: 'Alpha',
-        ativo: true,
-        email_funcional: null,
-      },
-      {
-        id: '2',
-        nome: 'Daniel Beta',
-        matricula: '202',
-        perfil: 'OPERADOR',
-        equipe: 'Alpha',
-        ativo: true,
-        email_funcional: null,
-      },
+      makeOperador({ id: '1', nome: 'Carlos Alfa', matricula: '201', perfil: 'OPERADOR', equipe: 'Alpha' }),
+      makeOperador({ id: '2', nome: 'Daniel Beta', matricula: '202', perfil: 'OPERADOR', equipe: 'Alpha' }),
     ]
-    render(<GestaoClient data={baseData({ operadores })} />)
+    renderGestao(<GestaoClient data={baseData({ operadores })} />)
     const search = screen.getByPlaceholderText(/Buscar operador/)
     await user.type(search, 'daniel')
     expect(screen.queryByText('Carlos Alfa')).not.toBeInTheDocument()
@@ -157,26 +169,25 @@ describe('GestaoClient', () => {
 
   it('TabEfetivo: botão "+ Novo Operador" abre modal', async () => {
     const user = userEvent.setup()
-    render(<GestaoClient data={baseData()} />)
+    renderGestao(<GestaoClient data={baseData()} />)
     await user.click(screen.getByRole('button', { name: '+ Novo Operador' }))
     expect(screen.getByText('Novo Operador')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Nome do operador')).toBeInTheDocument()
   })
 
-  it('TabFeriados lista feriados vindos das props', async () => {
-    const user = userEvent.setup()
+  it('TabFeriados lista feriados vindos das props', () => {
+    navMock.setGestaoTab('feriados')
     const feriados = [
       { id: 'f1', data: '2026-04-21', descricao: 'Tiradentes' },
       { id: 'f2', data: '2026-12-25', descricao: 'Natal' },
     ]
-    render(<GestaoClient data={baseData({ feriados })} />)
-    await user.click(screen.getByRole('button', { name: /📅\s*Feriados/ }))
+    renderGestao(<GestaoClient data={baseData({ feriados })} />)
     expect(screen.getByText('Tiradentes')).toBeInTheDocument()
     expect(screen.getByText('Natal')).toBeInTheDocument()
   })
 
-  it('TabDiarias exibe valor formatado como R$ 425,00', async () => {
-    const user = userEvent.setup()
+  it('TabDiarias exibe valor formatado como R$ 425,00', () => {
+    navMock.setGestaoTab('diarias')
     const diarias = [
       {
         id: 'd1',
@@ -186,8 +197,7 @@ describe('GestaoClient', () => {
         vigencia: '2026-01-01',
       },
     ]
-    render(<GestaoClient data={baseData({ diarias })} />)
-    await user.click(screen.getByRole('button', { name: /💰\s*Diárias/ }))
+    renderGestao(<GestaoClient data={baseData({ diarias })} />)
     const money = screen.getByText('R$ 425,00')
     expect(money).toBeInTheDocument()
     expect(money).toHaveStyle({ color: '#16a34a' })
