@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node scripts/sync-db.js --auto && next dev",
     "db:sync": "node scripts/sync-db.js",
+    "db:cleanup-maio-2026": "node scripts/cleanup-maio-2026.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

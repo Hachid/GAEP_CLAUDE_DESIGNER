@@ -14,11 +14,19 @@ export type AtividadeStat = {
   totalMinutos: number
 }
 
-export type EvolucaoMes = {
-  mes: string   // "2026-04"
-  label: string // "Abr/26"
+export type EvolucaoOperador = {
+  id: string
+  nome: string
   minutos: number
+}
+
+export type EvolucaoMes = {
+  mes: string           // "2026-04"
+  label: string         // "Abr/26"
+  minutos: number       // soma das horas trabalhadas (todos os participantes)
+  minutosPrevistos: number  // dias_uteis × 7h × 60 (de gaep_dias_uteis)
   registros: number
+  porOperador: EvolucaoOperador[]
 }
 
 export type OperadorStat = {
@@ -44,4 +52,15 @@ export type DashboardFiltros = {
   dataFim: string     // YYYY-MM-DD
   categoriaId: string // '' = todas
   atividadeId: string // '' = todas
+}
+
+/** Linha de relatório para PDF consolidado (texto + metadados + fotos). */
+export type RelatorioLinhaConsolidado = {
+  id: string
+  data: string
+  descricao_revisada: string
+  fotos_urls: unknown
+  categoriaNome: string | null
+  atividadeNome: string | null
+  relatoristaNome: string | null
 }

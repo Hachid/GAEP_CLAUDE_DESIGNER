@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "regions": ["gru1"],
+  "functions": {
+    "app/api/pdf/consolidado/route.ts": {
+      "maxDuration": 120,
+      "memory": 3008
+    },
+    "app/api/pdf/[id]/route.tsx": {
+      "maxDuration": 120,
+      "memory": 3008
+    }
+  }
+}

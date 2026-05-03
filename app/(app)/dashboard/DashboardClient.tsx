@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useCallback, useEffect, useState, useTransition } from 'react'
+import { useVariavelMes } from '@/lib/variavelMes'
 import dynamic from 'next/dynamic'
 import { FiltrosDash } from '@/components/dashboard/FiltrosDash'
 import { KPIGrid } from '@/components/dashboard/KPIGrid'
-import { RankingOperadores } from '@/components/dashboard/RankingOperadores'
 import { refreshKPIData } from './actions'
 import type { KPIData, DashboardFiltros, EvolucaoMes } from './types'
 
@@ -28,6 +28,8 @@ type Props = {
   filtrosIniciais: DashboardFiltros
   categorias: { id: string; nome: string }[]
   atividades: { id: string; nome: string }[]
+  /** Sincroniza dias úteis no contexto global (variável do mês). */
+  diasUteisMesInicial?: { referenciaMes: string; diasUteis: number }[]
 }
 
 const cardStyle: React.CSSProperties = {
@@ -55,11 +57,23 @@ export function DashboardClient({
   filtrosIniciais,
   categorias,
   atividades,
+  diasUteisMesInicial = [],
 }: Props) {
   const [kpi, setKpi] = useState<KPIData>(kpiInicial)
   const [filtros, setFiltros] = useState<DashboardFiltros>(filtrosIniciais)
   const [erroFiltro, setErroFiltro] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const { mergeDiasUteisMes, setMesReferenciaFiltro } = useVariavelMes()
+
+  useEffect(() => {
+    if (diasUteisMesInicial.length > 0) mergeDiasUteisMes(diasUteisMesInicial)
+  }, [diasUteisMesInicial, mergeDiasUteisMes])
+
+  useEffect(() => {
+    const mi = filtros.dataInicio.slice(0, 7)
+    const mf = filtros.dataFim.slice(0, 7)
+    if (mi === mf) setMesReferenciaFiltro(mi)
+  }, [filtros.dataInicio, filtros.dataFim, setMesReferenciaFiltro])
 
   function handleAtualizar(novosFiltros: DashboardFiltros) {
     setFiltros(novosFiltros)
@@ -73,6 +87,15 @@ export function DashboardClient({
       }
     })
   }
+
+  const abrirConsolidadoPdf = useCallback(() => {
+    const p = new URLSearchParams()
+    p.set('dataInicio', filtros.dataInicio)
+    p.set('dataFim', filtros.dataFim)
+    if (filtros.categoriaId) p.set('categoriaId', filtros.categoriaId)
+    if (filtros.atividadeId) p.set('atividadeId', filtros.atividadeId)
+    window.open(`/api/pdf/consolidado?${p.toString()}`, '_blank', 'noopener,noreferrer')
+  }, [filtros])
 
   return (
     <div style={{ paddingBottom: 30 }}>
@@ -102,6 +125,27 @@ export function DashboardClient({
         </div>
       )}
 
+      <button
+        type="button"
+        onClick={abrirConsolidadoPdf}
+        style={{
+          width: '100%',
+          marginBottom: 18,
+          padding: '14px 16px',
+          background: '#0f172a',
+          color: '#fff',
+          border: 'none',
+          borderRadius: 12,
+          fontWeight: 800,
+          fontSize: '0.88rem',
+          letterSpacing: 0.4,
+          cursor: 'pointer',
+          boxShadow: '0 4px 14px rgba(15,23,42,0.18)',
+        }}
+      >
+        Gerar consolidado PDF
+      </button>
+
       <KPIGrid kpi={kpi} />
 
       <div style={cardStyle}>
@@ -112,8 +156,6 @@ export function DashboardClient({
       <div style={cardStyle}>
         <RankingBars data={kpi.rankingAtividades} />
       </div>
-
-      <RankingOperadores data={kpi.rankingOperadores} />
 
       <EvolucaoLinhas evolucao={evolucaoInicial} />
     </div>

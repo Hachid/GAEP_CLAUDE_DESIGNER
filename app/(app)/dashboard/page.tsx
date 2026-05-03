@@ -7,6 +7,7 @@ import { SidebarNav } from '@/components/layout/SidebarNav'
 import { DashboardClient } from './DashboardClient'
 import { fetchKPIData, fetchEvolucao } from './actions'
 import type { DashboardFiltros } from './types'
+import { getCategorias, getAtividades } from '@/lib/cache/queries'
 
 interface OperadorComGaep {
   id: string
@@ -61,10 +62,25 @@ export default async function DashboardPage() {
   const gaep = operadorAtual.gaeps
   if (!gaep) redirect('/relatorio')
 
-  // ── 3. Período padrão: mês atual ─────────────────────────────
+  // ── 3. Período padrão: último mês com dados (fallback: mês atual) ──
   const now = new Date()
-  const ano = now.getFullYear()
-  const mes = now.getMonth() + 1
+  let baseDate = now
+  const { data: ultimoRelatorio } = await admin
+    .from('relatorios')
+    .select('data')
+    .eq('gaep_id', gaep.id)
+    .is('deleted_at', null)
+    .order('data', { ascending: false })
+    .limit(1)
+    .maybeSingle<{ data: string }>()
+
+  if (ultimoRelatorio?.data) {
+    const parsed = new Date(`${ultimoRelatorio.data}T12:00:00`)
+    if (!Number.isNaN(parsed.getTime())) baseDate = parsed
+  }
+
+  const ano = baseDate.getFullYear()
+  const mes = baseDate.getMonth() + 1
   const filtrosIniciais: DashboardFiltros = {
     dataInicio: `${ano}-${String(mes).padStart(2, '0')}-01`,
     dataFim: new Date(ano, mes, 0).toISOString().slice(0, 10),
@@ -72,20 +88,23 @@ export default async function DashboardPage() {
     atividadeId: '',
   }
 
-  // ── 4. Busca dados em paralelo ────────────────────────────────
-  const [catRes, atRes, kpiInicial, evolucaoInicial] = await Promise.all([
-    admin.from('categorias_atividade').select('id, nome').order('nome'),
-    admin
-      .from('atividades')
-      .select('id, nome')
-      .is('deleted_at', null)
-      .order('nome'),
+  // ── 4. Busca dados em paralelo (categorias/atividades via cache) ──
+  const [categorias, atividades, kpiInicial, evolucaoInicial, diasUteisRes] = await Promise.all([
+    getCategorias(),
+    getAtividades(),
     fetchKPIData(gaep.id, filtrosIniciais),
     fetchEvolucao(gaep.id),
+    admin
+      .from('gaep_dias_uteis')
+      .select('referencia_mes, dias_uteis')
+      .eq('gaep_id', gaep.id)
+      .order('referencia_mes', { ascending: false }),
   ])
 
-  const categorias = (catRes.data ?? []) as { id: string; nome: string }[]
-  const atividades = (atRes.data ?? []) as { id: string; nome: string }[]
+  const diasUteisMesInicial = (diasUteisRes.data ?? []).map((r) => ({
+    referenciaMes: String(r.referencia_mes),
+    diasUteis: Number(r.dias_uteis),
+  }))
 
   // ── 5. Render ─────────────────────────────────────────────────
   return (
@@ -123,6 +142,7 @@ export default async function DashboardPage() {
             filtrosIniciais={filtrosIniciais}
             categorias={categorias}
             atividades={atividades}
+            diasUteisMesInicial={diasUteisMesInicial}
           />
         </div>
       </main>

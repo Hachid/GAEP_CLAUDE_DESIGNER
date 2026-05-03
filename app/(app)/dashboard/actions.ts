@@ -1,7 +1,8 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { unstable_cache } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getSessionOrThrow } from '@/lib/auth'
 import { minutesBetween, toMesLabel } from './utils'
 import type {
   KPIData,
@@ -10,6 +11,7 @@ import type {
   AtividadeStat,
   OperadorStat,
   EvolucaoMes,
+  RelatorioLinhaConsolidado,
 } from './types'
 
 type RelRow = {
@@ -137,20 +139,21 @@ async function computeKPI(gaepId: string, filtros: DashboardFiltros): Promise<KP
   }
 }
 
-// Called from page.tsx (server) — gaepId already resolved
-export async function fetchKPIData(gaepId: string, filtros: DashboardFiltros): Promise<KPIData> {
-  return computeKPI(gaepId, filtros)
-}
+// Called from page.tsx (server) — gaepId already resolved.
+// Cache de 60 s por (gaepId × filtros). Invalidado via revalidateTag('relatorios-kpi')
+// quando um relatório é salvo, editado ou excluído.
+export const fetchKPIData = unstable_cache(
+  computeKPI,
+  ['kpi-dashboard'],
+  { revalidate: 60, tags: ['relatorios-kpi'] }
+)
 
 // Called from DashboardClient (client) — resolves gaepId from auth
 export async function refreshKPIData(
   filtros: DashboardFiltros
 ): Promise<{ data: KPIData | null; error: string | null }> {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const user = await getSessionOrThrow().catch(() => null)
     if (!user) return { data: null, error: 'Não autenticado' }
 
     const admin = createAdminClient()
@@ -171,50 +174,205 @@ export async function refreshKPIData(
   }
 }
 
-type EvoRow = {
+type PartRow = {
+  operador_id: string
+  hora_inicio: string | null
+  hora_fim: string | null
+}
+
+type RelComPartsRow = {
   data: string
   hora_inicio: string
   hora_fim: string
+  relatorista_id: string | null
+  relatorio_participantes: PartRow[]
 }
 
-// Fetches full monthly evolution (all history, no date filter)
-export async function fetchEvolucao(gaepId: string): Promise<EvolucaoMes[]> {
+// Cache de 60 s por gaepId. Mesma tag de invalidação do KPI.
+export const fetchEvolucao = unstable_cache(
+  _fetchEvolucaoRaw,
+  ['evolucao-dashboard'],
+  { revalidate: 60, tags: ['relatorios-kpi'] }
+)
+
+async function _fetchEvolucaoRaw(gaepId: string): Promise<EvolucaoMes[]> {
   const admin = createAdminClient()
 
-  const dataMinima = new Date()
+  const hoje = new Date()
+  const dataMaxima = hoje.toISOString().slice(0, 10)
+  const mesAtual = dataMaxima.slice(0, 7) // "YYYY-MM"
+  const dataMinima = new Date(hoje)
   dataMinima.setMonth(dataMinima.getMonth() - 11)
   dataMinima.setDate(1)
   const dataCorte = dataMinima.toISOString().slice(0, 10)
+  const mesCorte = dataCorte.slice(0, 7) // "YYYY-MM"
 
-  const { data } = await admin
-    .from('relatorios')
-    .select('data, hora_inicio, hora_fim')
-    .eq('gaep_id', gaepId)
-    .is('deleted_at', null)
-    .gte('data', dataCorte)
-    .order('data')
+  // Busca relatórios (com participantes) e dias úteis em paralelo
+  const [relRes, diasRes] = await Promise.all([
+    admin
+      .from('relatorios')
+      .select('data, hora_inicio, hora_fim, relatorista_id, relatorio_participantes(operador_id, hora_inicio, hora_fim)')
+      .eq('gaep_id', gaepId)
+      .is('deleted_at', null)
+      .gte('data', dataCorte)
+      .lte('data', dataMaxima)
+      .order('data'),
+    admin
+      .from('gaep_dias_uteis')
+      .select('referencia_mes, dias_uteis')
+      .eq('gaep_id', gaepId)
+      .gte('referencia_mes', mesCorte)
+      .lte('referencia_mes', mesAtual),
+  ])
 
-  const rows = (data ?? []) as EvoRow[]
-  const mesMap = new Map<string, { minutos: number; registros: number }>()
+  const rows = (relRes.data ?? []) as RelComPartsRow[]
 
-  for (const r of rows) {
-    const mes = r.data.slice(0, 7)
-    const mins = minutesBetween(r.hora_inicio, r.hora_fim)
-    const existing = mesMap.get(mes)
-    if (existing) {
-      existing.minutos += mins
-      existing.registros++
-    } else {
-      mesMap.set(mes, { minutos: mins, registros: 1 })
+  // Mapa mês → minutos previstos (dias_uteis × 7h × 60min)
+  const MINS_POR_DIA = 7 * 60
+  const previstosMap = new Map<string, number>()
+  for (const d of ((diasRes.data ?? []) as Array<{ referencia_mes: string; dias_uteis: number }>)) {
+    previstosMap.set(d.referencia_mes, d.dias_uteis * MINS_POR_DIA)
+  }
+
+  // Agrupa por mês — horas reais por participante
+  const mesMap = new Map<string, {
+    minutos: number
+    registros: number
+    opMins: Map<string, number>
+  }>()
+
+  for (const rel of rows) {
+    const mes = rel.data.slice(0, 7)
+
+    let entry = mesMap.get(mes)
+    if (!entry) {
+      entry = { minutos: 0, registros: 0, opMins: new Map() }
+      mesMap.set(mes, entry)
+    }
+    entry.registros++
+
+    const parts = rel.relatorio_participantes ?? []
+
+    if (parts.length > 0) {
+      for (const p of parts) {
+        const inicio = p.hora_inicio ?? rel.hora_inicio
+        const fim = p.hora_fim ?? rel.hora_fim
+        const mins = minutesBetween(inicio, fim)
+        entry.minutos += mins
+        entry.opMins.set(p.operador_id, (entry.opMins.get(p.operador_id) ?? 0) + mins)
+      }
+    } else if (rel.relatorista_id) {
+      const mins = minutesBetween(rel.hora_inicio, rel.hora_fim)
+      entry.minutos += mins
+      entry.opMins.set(rel.relatorista_id, (entry.opMins.get(rel.relatorista_id) ?? 0) + mins)
+    }
+  }
+
+  // Garante que meses com dias_uteis configurados apareçam mesmo sem relatórios
+  for (const mes of previstosMap.keys()) {
+    if (!mesMap.has(mes)) {
+      mesMap.set(mes, { minutos: 0, registros: 0, opMins: new Map() })
+    }
+  }
+
+  // Coleta todos os IDs de operadores para busca em batch
+  const allOpIds = new Set<string>()
+  for (const entry of mesMap.values()) {
+    for (const id of entry.opMins.keys()) allOpIds.add(id)
+  }
+
+  let opNameMap: Record<string, string> = {}
+  if (allOpIds.size > 0) {
+    const { data: opData } = await admin
+      .from('operadores')
+      .select('id, nome')
+      .in('id', [...allOpIds])
+    if (opData) {
+      opNameMap = Object.fromEntries(
+        (opData as Array<{ id: string; nome: string }>).map((o) => [o.id, o.nome])
+      )
     }
   }
 
   return [...mesMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([mes, { minutos, registros }]) => ({
+    .map(([mes, { minutos, registros, opMins }]) => ({
       mes,
       label: toMesLabel(mes),
       minutos,
+      minutosPrevistos: previstosMap.get(mes) ?? 0,
       registros,
+      porOperador: [...opMins.entries()].map(([id, min]) => ({
+        id,
+        nome: opNameMap[id] ?? id,
+        minutos: min,
+      })),
     }))
+}
+
+/**
+ * Relatórios no período/filtros para corpo do PDF consolidado (só servidor, após auth na rota).
+ */
+export async function fetchRelatoriosParaConsolidadoPdf(
+  gaepId: string,
+  filtros: DashboardFiltros
+): Promise<RelatorioLinhaConsolidado[]> {
+  await getSessionOrThrow()
+  const admin = createAdminClient()
+
+  let q = admin
+    .from('relatorios')
+    .select(
+      `id, data, descricao_revisada, fotos_urls, relatorista_id,
+       atividades(id, nome),
+       categorias_atividade(id, nome)`
+    )
+    .eq('gaep_id', gaepId)
+    .is('deleted_at', null)
+    .gte('data', filtros.dataInicio)
+    .lte('data', filtros.dataFim)
+    .order('data', { ascending: true })
+
+  if (filtros.categoriaId) q = q.eq('categoria_id', filtros.categoriaId) as typeof q
+  if (filtros.atividadeId) q = q.eq('atividade_id', filtros.atividadeId) as typeof q
+
+  const { data, error } = await q
+  if (error || !data) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[consolidadoPdf] fetch relatorios:', error?.message)
+    }
+    return []
+  }
+
+  type Row = {
+    id: string
+    data: string
+    descricao_revisada: string
+    fotos_urls: unknown
+    relatorista_id: string | null
+    atividades: { id: string; nome: string } | { id: string; nome: string }[] | null
+    categorias_atividade: { id: string; nome: string } | { id: string; nome: string }[] | null
+  }
+
+  const rows = data as Row[]
+  const relIds = [...new Set(rows.map((r) => r.relatorista_id).filter(Boolean))] as string[]
+  let nomeMap: Record<string, string> = {}
+  if (relIds.length > 0) {
+    const { data: ops } = await admin.from('operadores').select('id, nome').in('id', relIds)
+    nomeMap = Object.fromEntries(((ops ?? []) as Array<{ id: string; nome: string }>).map((o) => [o.id, o.nome]))
+  }
+
+  return rows.map((r) => {
+    const cat = pickFirst(r.categorias_atividade)
+    const at = pickFirst(r.atividades)
+    return {
+      id: r.id,
+      data: r.data,
+      descricao_revisada: r.descricao_revisada ?? '',
+      fotos_urls: r.fotos_urls,
+      categoriaNome: cat?.nome ?? null,
+      atividadeNome: at?.nome ?? null,
+      relatoristaNome: r.relatorista_id ? (nomeMap[r.relatorista_id] ?? null) : null,
+    }
+  })
 }
