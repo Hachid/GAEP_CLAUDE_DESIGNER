@@ -13,9 +13,15 @@ interface Operador {
 interface LoginFormProps {
   operadores: Operador[]
   carregamentoComErro?: boolean
+  /** Deploy sem env do Supabase (ex.: build Vercel) — mensagem fixa para o administrador. */
+  avisoAmbiente?: string
 }
 
-export function LoginForm({ operadores, carregamentoComErro = false }: LoginFormProps) {
+export function LoginForm({
+  operadores,
+  carregamentoComErro = false,
+  avisoAmbiente,
+}: LoginFormProps) {
   const [state, formAction, isPending] = useActionState<LoginState, FormData>(
     loginAction,
     null
@@ -69,6 +75,26 @@ export function LoginForm({ operadores, carregamentoComErro = false }: LoginForm
         Gestão de Atividades e Efetivo Policial
       </p>
 
+      {avisoAmbiente ? (
+        <p
+          role="alert"
+          style={{
+            maxWidth: '420px',
+            margin: '0 0 20px 0',
+            padding: '12px 14px',
+            fontSize: '0.8rem',
+            lineHeight: 1.45,
+            color: '#991b1b',
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '12px',
+            textAlign: 'left',
+          }}
+        >
+          {avisoAmbiente}
+        </p>
+      ) : null}
+
       <div
         style={{
           background: '#fff',
@@ -99,6 +125,7 @@ export function LoginForm({ operadores, carregamentoComErro = false }: LoginForm
               id="operador-select"
               name="matricula"
               required
+              disabled={Boolean(avisoAmbiente)}
               defaultValue=""
               style={{
                 width: '100%',
@@ -154,6 +181,7 @@ export function LoginForm({ operadores, carregamentoComErro = false }: LoginForm
               type="password"
               placeholder="Digite sua senha"
               required
+              disabled={Boolean(avisoAmbiente)}
               style={{
                 width: '100%',
                 padding: '12px 14px',
@@ -182,7 +210,7 @@ export function LoginForm({ operadores, carregamentoComErro = false }: LoginForm
 
           <button
             type="submit"
-            disabled={isPending}
+            disabled={isPending || Boolean(avisoAmbiente)}
             style={{
               width: '100%',
               padding: '14px',

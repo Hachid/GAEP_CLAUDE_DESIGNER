@@ -17,6 +17,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+  if (!supabaseUrl || !supabaseAnon) {
+    return NextResponse.next()
+  }
+
   const response = NextResponse.next()
 
   const cookieMethods: CookieMethodsServer = {
@@ -31,8 +37,8 @@ export async function middleware(request: NextRequest) {
   }
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnon,
     { cookies: cookieMethods, cookieOptions: supabaseCookieOptions }
   )
 
