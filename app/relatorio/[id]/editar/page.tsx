@@ -1,9 +1,9 @@
-import { redirect } from 'next/navigation'
+import { redirect, notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { SidebarNav } from '@/components/layout/SidebarNav'
-import { buscarHistoricoRelatorios } from '../actions'
-import { HistoricoClient } from './HistoricoClient'
+import { buscarRelatorio } from '../../actions'
+import { RelatorioEditarForm } from './RelatorioEditarForm'
 import { getCategorias, getAtividades } from '@/lib/cache/queries'
 
 interface OperadorComGaep {
@@ -15,7 +15,18 @@ interface OperadorComGaep {
   gaeps: { id: string; nome: string } | null
 }
 
-export default async function HistoricoPage() {
+interface OperadorSimples {
+  id: string
+  nome: string
+}
+
+interface Props {
+  params: Promise<{ id: string }>
+}
+
+export default async function RelatorioEditarPage({ params }: Props) {
+  const { id } = await params
+
   const supabase = await createClient()
   const {
     data: { user },
@@ -51,15 +62,31 @@ export default async function HistoricoPage() {
 
   if (!operadorAtual?.gaeps) redirect('/relatorio')
 
-  const [historicoRes, categorias, atividades, opsRes] = await Promise.all([
-    buscarHistoricoRelatorios(operadorAtual.gaeps.id),
+  const bundle = await buscarRelatorio(id)
+  if (bundle.error || !bundle.data) notFound()
+
+  const relatorio = bundle.data
+  if (relatorio.gaep_id !== operadorAtual.gaep_id) notFound()
+
+  const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(operadorAtual.perfil ?? '')
+  const isRelatorista = relatorio.relatorista_id === operadorAtual.id
+  if (!isAdmin && !isRelatorista) notFound()
+
+  const [opRes, categorias, atividades] = await Promise.all([
+    admin
+      .from('operadores')
+      .select('id, nome_guerra:nome')
+      .eq('gaep_id', operadorAtual.gaep_id)
+      .eq('ativo', true)
+      .is('deleted_at', null)
+      .order('nome'),
     getCategorias(),
     getAtividades(),
-    admin.from('operadores').select('id, nome').eq('gaep_id', operadorAtual.gaep_id).is('deleted_at', null).order('nome'),
   ])
 
-  const relatorios = historicoRes.data ?? []
-  const operadores = (opsRes.data ?? []) as { id: string; nome: string }[]
+  const operadores: OperadorSimples[] = ((opRes.data ?? []) as Array<{ id: string; nome_guerra: string }>).map(
+    (o) => ({ id: o.id, nome: o.nome_guerra })
+  )
 
   return (
     <>
@@ -69,13 +96,14 @@ export default async function HistoricoPage() {
         perfil={operadorAtual.perfil ?? 'OPERADOR'}
       />
       <main style={{ minHeight: '100vh', background: '#f3f4f6', padding: '74px 16px 20px' }}>
-        <div style={{ maxWidth: 460, margin: '0 auto' }}>
-          <HistoricoClient
-            relatorios={relatorios}
+        <div style={{ maxWidth: 430, margin: '0 auto' }}>
+          <RelatorioEditarForm
+            relatorio={relatorio}
+            operadorAtual={{ id: operadorAtual.id, nome: operadorAtual.nome_guerra }}
+            gaepCodigo={operadorAtual.gaeps.nome}
+            operadores={operadores}
             categorias={categorias}
             atividades={atividades}
-            operadores={operadores}
-            operadorId={operadorAtual.id}
           />
         </div>
       </main>

@@ -13,13 +13,15 @@ vi.mock('next/link', () => ({
     href,
     target,
     rel,
+    download,
   }: {
     children: React.ReactNode
     href: string
     target?: string
     rel?: string
+    download?: string | boolean
   }) => (
-    <a href={href} target={target} rel={rel}>
+    <a href={href} target={target} rel={rel} {...(typeof download === 'string' ? { download } : {})}>
       {children}
     </a>
   ),
@@ -70,6 +72,9 @@ const mockRelatorio: RelatorioDetalhado = {
   hora_inicio: '08:00:00',
   hora_fim: '12:00:00',
   horas_totais: 4,
+  categoria_id: 'cat-1',
+  atividade_id: 'atv-1',
+  relatorista_id: 'op-1',
   descricao_bruta: 'Texto bruto.',
   descricao_revisada: 'Texto revisado do relatório operacional.',
   ocorrencias: 'Nenhuma ocorrência registrada.',
@@ -119,18 +124,11 @@ describe('RelatorioDetalheClient — vista de tela', () => {
     expect(iframe?.getAttribute('src')).toBe('/api/pdf/rel-1')
   })
 
-  it('exibe link "Nova aba" para o mesmo PDF', () => {
-    renderDetalhe()
-    const link = screen.getByRole('link', { name: /Nova aba/i })
-    expect(link).toHaveAttribute('href', '/api/pdf/rel-1')
-    expect(link).toHaveAttribute('target', '_blank')
-  })
-
   it('exibe link Baixar PDF com query download=1', () => {
     renderDetalhe()
     const link = screen.getByRole('link', { name: /Baixar PDF/i })
     expect(link).toHaveAttribute('href', '/api/pdf/rel-1?download=1')
-    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('download', 'relatorio-rel-1.pdf')
   })
 
   it('oculta o iframe ao clicar em Ocultar PDF', async () => {

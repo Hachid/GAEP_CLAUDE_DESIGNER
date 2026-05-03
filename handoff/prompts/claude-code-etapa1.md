@@ -3,6 +3,15 @@
 
 ---
 
+## Contexto atual do sistema (mai/2026)
+
+- O login já está implementado em `app/(auth)/login/page.tsx` com Supabase Auth.
+- O vínculo entre usuário autenticado e operador ocorre por `operadores.auth_id` com fallback por matrícula (`{matricula}@gaep.internal`).
+- Rotas protegidas e resolução de sessão ativa já estão em fluxo produtivo (`createClient`, `getSessionOrThrow`, redirecionamentos para `/login` e `/relatorio`).
+- Perfis usados no sistema: `OPERADOR`, `ADMIN`, `SUPER_ADMIN`.
+- As telas principais autenticadas já existem em `app/(app)/...` (`dashboard`, `relatorio`, `operadores`, `missoes`, `gestao`).
+- Este arquivo permanece como histórico da etapa inicial; para novos trabalhos, priorizar ajustes incrementais sobre o fluxo existente, sem reimplementar autenticação do zero.
+
 Vou implementar a **Etapa 1 do Sistema GAEP**: Tela de Login.
 
 Siga rigorosamente o `CLAUDE.md` do projeto (TDD, soft delete, audit log, Conventional Commits).

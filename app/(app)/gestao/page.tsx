@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { GestaoClient } from './GestaoClient'
 import { SidebarNav } from '@/components/layout/SidebarNav'
+import { getCategorias, getAtividades } from '@/lib/cache/queries'
 import type {
   GestaoData,
   OperadorRow,
@@ -13,6 +14,11 @@ import type {
   GaepRow,
   ConfigRelatorioUIData,
 } from './GestaoClient'
+import {
+  DEFAULT_TITULO_RELATORIO_INSTITUCIONAL,
+  resolveTituloRelatorioFromDb,
+} from '@/lib/pdf/defaultTituloRelatorio'
+import { DEFAULT_PRINT_MARGINS_MM } from '@/lib/pdf/relatorioIntegrity'
 
 export default async function GestaoPage() {
   // ── 1. Auth ───────────────────────────────────────────────────
@@ -112,15 +118,10 @@ export default async function GestaoPage() {
   }
 
   // ── 3. Busca de dados em paralelo ─────────────────────────────
-  const [opsData, catRes, atRes, ferRes, diasUteisRes, iaRes, relatorioCfgRes, diarRes, gaepsRes] = await Promise.all([
+  const [opsData, categorias, atividades, ferRes, diasUteisRes, iaRes, relatorioCfgRes, diarRes, gaepsRes] = await Promise.all([
     listarOperadoresGestao(gaep.id),
-    admin.from('categorias_atividade').select('id, nome').order('nome'),
-
-    admin
-      .from('atividades')
-      .select('id, nome')
-      .is('deleted_at', null)
-      .order('nome'),
+    getCategorias(),
+    getAtividades(),
 
     admin
       .from('feriados')
@@ -158,8 +159,8 @@ export default async function GestaoPage() {
     operadorAtual: { id: operador.id, nome: String(operador.nome), perfil },
     gaep,
     operadores: opsData,
-    categorias: (catRes.data ?? []) as { id: string; nome: string }[],
-    atividades: (atRes.data ?? []) as AtividadeRow[],
+    categorias,
+    atividades: atividades as AtividadeRow[],
     feriados: (ferRes.data ?? []) as FeriadoRow[],
     diasUteisMes: (diasUteisRes.data ?? []).map((d) => ({
       id: String(d.id),
@@ -183,8 +184,8 @@ export default async function GestaoPage() {
     configRelatorio: relatorioCfgRes.data
       ? {
           id: String(relatorioCfgRes.data.id),
-          tituloTexto: String(relatorioCfgRes.data.titulo_texto ?? 'RELATÓRIO OPERACIONAL'),
-          subtituloTexto: String(relatorioCfgRes.data.subtitulo_texto ?? 'RELATÓRIO DE ATIVIDADE(S)'),
+          tituloTexto: resolveTituloRelatorioFromDb(relatorioCfgRes.data.titulo_texto),
+          subtituloTexto: String(relatorioCfgRes.data.subtitulo_texto ?? ''),
           descricaoTexto: String(relatorioCfgRes.data.descricao_texto ?? ''),
           rodapeTexto: String(relatorioCfgRes.data.rodape_texto ?? '{{GAEP}}'),
           timbradoUrl: relatorioCfgRes.data.timbrado_url ? String(relatorioCfgRes.data.timbrado_url) : null,
@@ -230,17 +231,17 @@ export default async function GestaoPage() {
               | undefined
             const m = layout?.margins
             return {
-              top: Number(m?.top ?? 1.5),
-              right: Number(m?.right ?? 1.5),
-              bottom: Number(m?.bottom ?? 1.5),
-              left: Number(m?.left ?? 1.5),
+              top: Number(m?.top ?? DEFAULT_PRINT_MARGINS_MM.top),
+              right: Number(m?.right ?? DEFAULT_PRINT_MARGINS_MM.right),
+              bottom: Number(m?.bottom ?? DEFAULT_PRINT_MARGINS_MM.bottom),
+              left: Number(m?.left ?? DEFAULT_PRINT_MARGINS_MM.left),
             }
           })(),
         }
       : {
           id: null,
-          tituloTexto: 'RELATÓRIO OPERACIONAL',
-          subtituloTexto: 'RELATÓRIO DE ATIVIDADE(S)',
+          tituloTexto: DEFAULT_TITULO_RELATORIO_INSTITUCIONAL,
+          subtituloTexto: '',
           descricaoTexto: '',
           rodapeTexto: '{{GAEP}}',
           timbradoUrl: null,
@@ -276,7 +277,7 @@ export default async function GestaoPage() {
             lineHeight: 1.3,
             fontSize: 8,
           },
-          printMargins: { top: 1.5, right: 1.5, bottom: 1.5, left: 1.5 },
+          printMargins: { ...DEFAULT_PRINT_MARGINS_MM },
         },
     diarias: (diarRes.data ?? []).map((d) => ({
       id: String(d.id),

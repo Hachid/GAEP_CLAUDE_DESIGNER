@@ -169,8 +169,7 @@ export function RelatorioDetalheClient({
         <Link
           href={`/api/pdf/${relatorio.id}?download=1`}
           prefetch={false}
-          target="_blank"
-          rel="noopener noreferrer"
+          download={`relatorio-${relatorio.id}.pdf`}
           style={{
             padding: '8px 12px',
             background: '#fff',
@@ -184,22 +183,6 @@ export function RelatorioDetalheClient({
           }}
         >
           Baixar PDF
-        </Link>
-        <Link
-          href={`/api/pdf/${relatorio.id}`}
-          prefetch={false}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            padding: '8px 10px',
-            color: '#1a237e',
-            fontWeight: 700,
-            fontSize: '0.72rem',
-            whiteSpace: 'nowrap',
-            textDecoration: 'none',
-          }}
-        >
-          Nova aba
         </Link>
       </div>
 

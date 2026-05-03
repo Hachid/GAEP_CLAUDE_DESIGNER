@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { VariavelMesProvider } from '@/lib/variavelMes'
 
 export const metadata: Metadata = {
   title: 'GAEP-CAT',
@@ -13,7 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        <VariavelMesProvider>{children}</VariavelMesProvider>
+      </body>
     </html>
   )
 }

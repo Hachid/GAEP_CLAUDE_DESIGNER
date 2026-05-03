@@ -1,8 +1,8 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { revalidatePath } from 'next/cache'
+import { getSessionOrThrow } from '@/lib/auth'
+import { revalidatePath, revalidateTag } from 'next/cache'
 
 type ActionResult = { error?: string }
 type CsvRow = Record<string, string>
@@ -88,11 +88,7 @@ interface OperadorCtx {
 }
 
 async function getAdminCtx(): Promise<OperadorCtx> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Não autenticado.')
+  const user = await getSessionOrThrow()
 
   const admin = createAdminClient()
   const { data: op } = await admin
@@ -129,6 +125,11 @@ export async function criarOperador(input: {
   cpf?: string
   email?: string
 }): Promise<{ id?: string; error?: string }> {
+  const PERFIS_VALIDOS = ['OPERADOR', 'ADMIN', 'SUPER_ADMIN'] as const
+  if (!PERFIS_VALIDOS.includes(input.perfil as (typeof PERFIS_VALIDOS)[number])) {
+    return { error: 'Perfil inválido. Use OPERADOR, ADMIN ou SUPER_ADMIN.' }
+  }
+
   try {
     const { admin } = await getAdminCtx()
 
@@ -268,6 +269,11 @@ export async function editarOperador(
     email?: string
   }
 ): Promise<ActionResult> {
+  const PERFIS_VALIDOS = ['OPERADOR', 'ADMIN', 'SUPER_ADMIN'] as const
+  if (!PERFIS_VALIDOS.includes(updates.perfil as (typeof PERFIS_VALIDOS)[number])) {
+    return { error: 'Perfil inválido. Use OPERADOR, ADMIN ou SUPER_ADMIN.' }
+  }
+
   try {
     const { admin } = await getAdminCtx()
     const pediuCamposComplementares = hasCamposComplementares(updates)
@@ -396,6 +402,7 @@ export async function adicionarAtividade(
       .single()
     if (error) return { error: error.message }
     revalidatePath('/gestao')
+    revalidateTag('atividades-lookup')
     return { id: String(data.id) }
   } catch (e) {
     return { error: (e as Error).message }
@@ -428,6 +435,7 @@ export async function editarAtividade(
       .is('deleted_at', null)
     if (error) return { error: error.message }
     revalidatePath('/gestao')
+    revalidateTag('atividades-lookup')
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -443,6 +451,7 @@ export async function removerAtividade(id: string): Promise<ActionResult> {
       .eq('id', id)
     if (error) return { error: error.message }
     revalidatePath('/gestao')
+    revalidateTag('atividades-lookup')
     return {}
   } catch (e) {
     return { error: (e as Error).message }

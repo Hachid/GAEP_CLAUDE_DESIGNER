@@ -1,7 +1,7 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getSessionOrThrow } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 
@@ -14,10 +14,7 @@ interface OperadorCtx {
 }
 
 async function getCtx(): Promise<OperadorCtx> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getSessionOrThrow()
   if (!user) throw new Error('Não autenticado.')
 
   const admin = createAdminClient()

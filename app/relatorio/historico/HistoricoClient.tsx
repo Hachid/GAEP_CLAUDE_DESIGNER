@@ -15,7 +15,6 @@ interface Props {
   categorias: Categoria[]
   atividades: Atividade[]
   operadores: Operador[]
-  perfil: string
   operadorId: string
 }
 
@@ -47,9 +46,8 @@ const PERIODOS = [
 
 type PeriodoId = typeof PERIODOS[number]['id'] | ''
 
-export function HistoricoClient({ relatorios, categorias, atividades, operadores, perfil, operadorId }: Props) {
+export function HistoricoClient({ relatorios, categorias, atividades, operadores, operadorId }: Props) {
   const router = useRouter()
-  const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(perfil)
 
   // Filtros
   const [busca, setBusca] = useState('')
@@ -65,6 +63,8 @@ export function HistoricoClient({ relatorios, categorias, atividades, operadores
   const [excluindoId, setExcluindoId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  /** PDF embutido no card só após clicar em Ver PDF (sem prefetch). */
+  const [pdfAbertoParaId, setPdfAbertoParaId] = useState<string | null>(null)
 
   function aplicarPeriodo(pid: PeriodoId) {
     setPeriodo(pid)
@@ -283,7 +283,7 @@ export function HistoricoClient({ relatorios, categorias, atividades, operadores
               >
                 <div style={{ padding: '13px 14px' }}>
                   {/* Linha 1: data + categoria + Ver */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5, gap: 8, flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1e293b' }}>{fmt(r.data)}</span>
                       {r.categoria_nome && (
@@ -296,12 +296,31 @@ export function HistoricoClient({ relatorios, categorias, atividades, operadores
                         </span>
                       )}
                     </div>
-                    <Link
-                      href={`/relatorio/${r.id}`}
-                      style={{ flexShrink: 0, padding: '6px 14px', background: 'rgba(26,35,126,0.07)', color: '#1a237e', borderRadius: 8, fontWeight: 700, fontSize: '0.78rem', textDecoration: 'none' }}
-                    >
-                      Ver →
-                    </Link>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+                      <Link
+                        href={`/relatorio/${r.id}/editar`}
+                        prefetch={false}
+                        style={{ padding: '6px 12px', background: 'rgba(26,35,126,0.07)', color: '#1a237e', borderRadius: 8, fontWeight: 700, fontSize: '0.76rem', textDecoration: 'none' }}
+                      >
+                        Editar relatório
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => setPdfAbertoParaId((cur) => (cur === r.id ? null : r.id))}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#1a237e',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: 8,
+                          fontWeight: 700,
+                          fontSize: '0.76rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {pdfAbertoParaId === r.id ? 'Ocultar PDF' : 'Ver PDF'}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Linha 2: atividade */}
@@ -321,30 +340,63 @@ export function HistoricoClient({ relatorios, categorias, atividades, operadores
                     {r.relatorista_nome && <span>· {r.relatorista_nome}</span>}
                   </div>
 
-                  {/* Exclusão (admin) */}
-                  {isAdmin && (
+                  {pdfAbertoParaId === r.id && (
                     <div style={{ marginTop: 10 }}>
-                      {confirmId === r.id ? (
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.78rem', color: '#ef4444', fontWeight: 600, flex: 1 }}>Confirmar exclusão?</span>
-                          <button
-                            onClick={() => handleExcluir(r.id)}
-                            disabled={excluindoId === r.id}
-                            style={{ padding: '5px 12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 7, fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}
-                          >
-                            {excluindoId === r.id ? '...' : 'Excluir'}
-                          </button>
-                          <button onClick={() => setConfirmId(null)} style={{ padding: '5px 12px', background: 'transparent', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 7, fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer' }}>
-                            Cancelar
-                          </button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setConfirmId(r.id)} style={{ background: 'transparent', border: 'none', color: '#cbd5e1', fontSize: '0.73rem', fontWeight: 600, cursor: 'pointer', padding: 0 }}>
-                          Excluir
-                        </button>
-                      )}
+                      <iframe
+                        title={`PDF relatório ${r.id}`}
+                        src={`/api/pdf/${r.id}`}
+                        style={{
+                          width: '100%',
+                          height: 'min(70vh, 640px)',
+                          minHeight: 280,
+                          border: '1.5px solid #e2e8f0',
+                          borderRadius: 12,
+                          background: '#f1f5f9',
+                          display: 'block',
+                        }}
+                      />
                     </div>
                   )}
+
+                  <div style={{ marginTop: 10 }}>
+                    {confirmId === r.id ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.78rem', color: '#ef4444', fontWeight: 600, flex: '1 1 100%' }}>Confirmar exclusão do relatório?</span>
+                        <button
+                          type="button"
+                          onClick={() => handleExcluir(r.id)}
+                          disabled={excluindoId === r.id}
+                          style={{ padding: '6px 14px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.78rem', cursor: excluindoId === r.id ? 'not-allowed' : 'pointer' }}
+                        >
+                          {excluindoId === r.id ? '...' : 'Sim, excluir'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmId(null)}
+                          style={{ padding: '6px 14px', background: 'transparent', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: 8, fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer' }}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmId(r.id)}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#fff',
+                          color: '#ef4444',
+                          border: '1.5px solid rgba(239,68,68,0.45)',
+                          borderRadius: 8,
+                          fontWeight: 700,
+                          fontSize: '0.76rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Excluir
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )

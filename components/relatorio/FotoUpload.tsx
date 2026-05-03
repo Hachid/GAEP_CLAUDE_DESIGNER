@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { uploadRelatorioFoto } from '@/app/relatorio/actions'
 
 interface FotoUploadProps {
@@ -10,6 +10,8 @@ interface FotoUploadProps {
   atividade: string
   data: string
   onUpload: (urls: string[]) => void
+  /** URLs já persistidas (ex.: edição de relatório). Sincroniza quando a assinatura muda. */
+  initialUrls?: string[]
 }
 
 /**
@@ -21,12 +23,31 @@ interface FotoUploadProps {
  * - Exibe thumbnails 65×65px após o upload bem-sucedido.
  */
 export function FotoUpload(props: FotoUploadProps) {
-  const { categoria, atividade, data, onUpload } = props
+  const { categoria, atividade, data, onUpload, initialUrls } = props
   const inputRef = useRef<HTMLInputElement>(null)
   const [previews, setPreviews] = useState<string[]>([])
-  const [uploading, setUploading] = useState(false)
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([])
+  const [uploading, setUploading] = useState(false)
   const [erroUpload, setErroUpload] = useState<string | null>(null)
+
+  const initialSig = (initialUrls ?? []).join('\n')
+  useEffect(() => {
+    const u = (initialUrls ?? []).filter((x) => typeof x === 'string' && x.trim().length > 0)
+    setUploadedUrls(u)
+    setPreviews([...u])
+    // Só ressincroniza quando o conjunto vindo do servidor muda (initialSig = serialização de initialUrls).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ver comentário acima
+  }, [initialSig])
+
+  function removerFoto(i: number) {
+    const src = previews[i]
+    if (src?.startsWith('blob:')) URL.revokeObjectURL(src)
+    const nextU = uploadedUrls.filter((_, j) => j !== i)
+    const nextP = previews.filter((_, j) => j !== i)
+    setUploadedUrls(nextU)
+    setPreviews(nextP)
+    onUpload(nextU)
+  }
 
   async function handleFiles(files: FileList) {
     const remaining = 3 - uploadedUrls.length
@@ -135,13 +156,37 @@ export function FotoUpload(props: FotoUploadProps) {
       {previews.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
           {previews.map((src, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={i}
-              src={src}
-              alt={`foto ${i + 1}`}
-              style={{ width: 65, height: 65, objectFit: 'cover', borderRadius: 8, border: '1px solid #e2e8f0' }}
-            />
+            <div key={`${src}-${i}`} style={{ position: 'relative', width: 65, height: 65 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={src}
+                alt={`foto ${i + 1}`}
+                style={{ width: 65, height: 65, objectFit: 'cover', borderRadius: 8, border: '1px solid #e2e8f0' }}
+              />
+              <button
+                type="button"
+                aria-label={`Remover foto ${i + 1}`}
+                onClick={() => removerFoto(i)}
+                style={{
+                  position: 'absolute',
+                  top: -6,
+                  right: -6,
+                  width: 22,
+                  height: 22,
+                  borderRadius: '50%',
+                  border: 'none',
+                  background: '#ef4444',
+                  color: '#fff',
+                  fontSize: 14,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+                }}
+              >
+                ×
+              </button>
+            </div>
           ))}
         </div>
       )}

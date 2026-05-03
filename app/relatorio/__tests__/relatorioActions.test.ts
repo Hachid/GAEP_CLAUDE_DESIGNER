@@ -195,6 +195,9 @@ describe('buscarRelatorio', () => {
       hora_inicio: '08:00:00',
       hora_fim: '12:00:00',
       horas_totais: 4,
+      categoria_id: 'cat-1',
+      atividade_id: 'atv-1',
+      relatorista_id: 'op-1',
       versao: 1,
       participantes: [],
       versoes: [],
@@ -476,38 +479,56 @@ describe('excluirRelatorio', () => {
     expect(result.error).toContain('Sessão')
   })
 
-  it('retorna erro quando operador não é ADMIN', async () => {
+  it('retorna erro quando operador não é dono nem admin', async () => {
     const { excluirRelatorio } = await import('../actions')
-    mockAdminFrom.mockReturnValue(makeChain({ data: { perfil: 'OPERADOR' }, error: null }))
+    mockAdminFrom.mockImplementation(
+      makeAdminMock({
+        operadores: { data: { perfil: 'OPERADOR' }, error: null },
+        relatorios: { data: { relatorista_id: 'outro-relator' }, error: null },
+      })
+    )
 
     const result = await excluirRelatorio({ id: 'rel-1', operadorId: 'op-comum' })
 
-    expect(result.error).toContain('administradores')
+    expect(result.error).toContain('relatorista ou um administrador')
   })
 
   it('faz soft delete — atualiza deleted_at em vez de deletar', async () => {
     const { excluirRelatorio } = await import('../actions')
-    const ch = makeChain({ data: null, error: null })
-
+    const relUpdateChain = makeChain({ data: null, error: null })
+    let relatorioCalls = 0
     mockAdminFrom.mockImplementation((table: string) => {
       if (table === 'operadores') return makeChain({ data: { perfil: 'ADMIN' }, error: null })
-      return ch
+      if (table === 'relatorios') {
+        relatorioCalls++
+        if (relatorioCalls === 1) {
+          return makeChain({ data: { relatorista_id: 'op-admin' }, error: null })
+        }
+        return relUpdateChain
+      }
+      return makeChain({ data: null, error: null })
     })
 
     await excluirRelatorio({ id: 'rel-1', operadorId: 'op-admin' })
 
-    // Deve usar UPDATE com deleted_at, nunca DELETE
-    expect(ch.update).toHaveBeenCalled()
-    const updateArg = (ch.update as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
+    expect(relUpdateChain.update).toHaveBeenCalled()
+    const updateArg = (relUpdateChain.update as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
     expect(updateArg).toHaveProperty('deleted_at')
     expect(updateArg.deleted_at).toBeTruthy()
   })
 
   it('chama revalidateTag("relatorios-kpi") ao excluir', async () => {
     const { excluirRelatorio } = await import('../actions')
-
+    let relatorioCalls = 0
     mockAdminFrom.mockImplementation((table: string) => {
       if (table === 'operadores') return makeChain({ data: { perfil: 'ADMIN' }, error: null })
+      if (table === 'relatorios') {
+        relatorioCalls++
+        if (relatorioCalls === 1) {
+          return makeChain({ data: { relatorista_id: 'op-admin' }, error: null })
+        }
+        return makeChain({ data: null, error: null })
+      }
       return makeChain({ data: null, error: null })
     })
 
@@ -518,9 +539,16 @@ describe('excluirRelatorio', () => {
 
   it('chama revalidatePath("/relatorio/historico")', async () => {
     const { excluirRelatorio } = await import('../actions')
-
+    let relatorioCalls = 0
     mockAdminFrom.mockImplementation((table: string) => {
       if (table === 'operadores') return makeChain({ data: { perfil: 'ADMIN' }, error: null })
+      if (table === 'relatorios') {
+        relatorioCalls++
+        if (relatorioCalls === 1) {
+          return makeChain({ data: { relatorista_id: 'op-admin' }, error: null })
+        }
+        return makeChain({ data: null, error: null })
+      }
       return makeChain({ data: null, error: null })
     })
 

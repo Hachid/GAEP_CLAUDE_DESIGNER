@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { ConfigRelatorioUIData } from '@/app/(app)/gestao/GestaoClient'
 import { MissoesRelatorioClient } from './MissoesRelatorioClient'
+import { DEFAULT_PRINT_MARGINS_MM } from '@/lib/pdf/relatorioIntegrity'
 
 interface Props {
   searchParams: Promise<{ pdf?: string | string[] }>
@@ -93,10 +94,10 @@ export default async function MissoesRelatorioPage({ searchParams }: Props) {
   const printMargins: PrintMargins = (() => {
     const layout = (configRaw?.layout_pdf as { margins?: Partial<PrintMargins> } | undefined)?.margins
     return {
-      top: Number(layout?.top ?? 1.5),
-      right: Number(layout?.right ?? 1.5),
-      bottom: Number(layout?.bottom ?? 1.5),
-      left: Number(layout?.left ?? 1.5),
+      top: Number(layout?.top ?? DEFAULT_PRINT_MARGINS_MM.top),
+      right: Number(layout?.right ?? DEFAULT_PRINT_MARGINS_MM.right),
+      bottom: Number(layout?.bottom ?? DEFAULT_PRINT_MARGINS_MM.bottom),
+      left: Number(layout?.left ?? DEFAULT_PRINT_MARGINS_MM.left),
     }
   })()
 

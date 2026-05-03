@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
+import { getSessionOrThrow } from '@/lib/auth'
+import { isRateLimited } from '@/lib/rateLimit'
 
 /** Corpo da requisição para a rota de revisão por IA. */
 interface IARequestBody {
@@ -32,17 +33,28 @@ interface OpenAIResponse {
  */
 export async function POST(req: NextRequest) {
   // ── 1. Validar sessão ─────────────────────────────────────────
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
+  let userId: string
+  try {
+    const user = await getSessionOrThrow()
+    userId = user.id
+  } catch {
     return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
   }
 
-  // ── 2. Parsear body ───────────────────────────────────────────
+  // ── 1b. Rate limit: máx 10 chamadas/hora por usuário ─────────
+  if (isRateLimited(`ia:${userId}`, 10, 60 * 60 * 1000)) {
+    return NextResponse.json(
+      { error: 'Limite de 10 revisões por hora atingido. Tente mais tarde.' },
+      { status: 429 }
+    )
+  }
+
+  // ── 2. Validar tamanho e parsear body ────────────────────────
+  const contentLength = Number(req.headers.get('content-length') ?? 0)
+  if (contentLength > 50_000) {
+    return NextResponse.json({ error: 'Requisição muito grande.' }, { status: 413 })
+  }
+
   let body: IARequestBody
   try {
     body = (await req.json()) as IARequestBody
@@ -54,6 +66,12 @@ export async function POST(req: NextRequest) {
 
   if (!descricaoBruta?.trim()) {
     return NextResponse.json({ error: 'Descrição bruta não pode estar vazia.' }, { status: 400 })
+  }
+  if (descricaoBruta.length > 5_000) {
+    return NextResponse.json({ error: 'Descrição muito longa. Máximo: 5.000 caracteres.' }, { status: 400 })
+  }
+  if (!Array.isArray(equipe)) {
+    return NextResponse.json({ error: 'Campo equipe inválido.' }, { status: 400 })
   }
 
   // ── 3. Buscar config_ia do GAEP ───────────────────────────────
@@ -109,6 +127,7 @@ export async function POST(req: NextRequest) {
   try {
     openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
+      signal: AbortSignal.timeout(45_000),
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${openaiKey}`,
@@ -124,9 +143,10 @@ export async function POST(req: NextRequest) {
       }),
     })
   } catch (fetchErr) {
-    console.error('[/api/ia] Falha de rede ao chamar OpenAI:', fetchErr)
+    const isTimeout = fetchErr instanceof Error && fetchErr.name === 'TimeoutError'
+    console.error('[/api/ia] Falha ao chamar OpenAI:', fetchErr)
     return NextResponse.json(
-      { error: 'Falha de conexão com o serviço de IA.' },
+      { error: isTimeout ? 'A IA demorou demais para responder. Tente novamente.' : 'Falha de conexão com o serviço de IA.' },
       { status: 502 }
     )
   }

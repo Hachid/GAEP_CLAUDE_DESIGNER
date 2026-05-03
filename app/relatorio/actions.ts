@@ -303,6 +303,9 @@ export interface RelatorioDetalhado {
   hora_inicio: string
   hora_fim: string
   horas_totais: number | null
+  categoria_id: string | null
+  atividade_id: string | null
+  relatorista_id: string | null
   descricao_bruta: string | null
   descricao_revisada: string
   ocorrencias: string | null
@@ -432,6 +435,9 @@ export async function buscarRelatorio(
       hora_inicio: relRow.hora_inicio as string,
       hora_fim: relRow.hora_fim as string,
       horas_totais: (relRow.horas_totais as number) ?? null,
+      categoria_id: (relRow.categoria_id as string) ?? null,
+      atividade_id: (relRow.atividade_id as string) ?? null,
+      relatorista_id: (relRow.relatorista_id as string) ?? null,
       descricao_bruta: (relRow.descricao_bruta as string) ?? null,
       descricao_revisada: relRow.descricao_revisada as string,
       ocorrencias: (relRow.ocorrencias as string) ?? null,
@@ -593,7 +599,177 @@ export async function editarRelatorio(
   return {}
 }
 
-/** Realiza soft delete de um relatório. Admin/SuperAdmin apenas. */
+/** Atualiza metadados, texto, fotos e equipe de um relatório existente. Relatorista ou admin do mesmo GAEP. */
+export interface AtualizarRelatorioCompletoInput {
+  id: string
+  operadorId: string
+  data: string
+  horaInicio: string
+  horaFim: string
+  horasTotais: number
+  categoriaId: string
+  atividadeId: string
+  outrosIntegrantes: string
+  descricaoBruta: string
+  descricaoRevisada: string
+  ocorrencias: string
+  fotosUrls: string[]
+  equipe: string[]
+}
+
+export async function atualizarRelatorioCompleto(
+  input: AtualizarRelatorioCompletoInput
+): Promise<{ error?: string }> {
+  try {
+    await getSessionOrThrow()
+  } catch {
+    return { error: 'Sessão expirada. Faça login novamente.' }
+  }
+
+  const salvarLike: SalvarRelatorioInput = {
+    gaepId: '',
+    relatoristId: input.operadorId,
+    data: input.data,
+    horaInicio: input.horaInicio,
+    horaFim: input.horaFim,
+    horasTotais: input.horasTotais,
+    categoriaId: input.categoriaId,
+    atividadeId: input.atividadeId,
+    outrosIntegrantes: input.outrosIntegrantes,
+    descricaoBruta: input.descricaoBruta,
+    descricaoRevisada: input.descricaoRevisada,
+    ocorrencias: input.ocorrencias,
+    fotosUrls: input.fotosUrls,
+    equipe: input.equipe,
+  }
+  const erroObrigatorios = validarObrigatoriosSalvarRelatorio(salvarLike)
+  if (erroObrigatorios) {
+    return { error: `⚠️ ${erroObrigatorios}` }
+  }
+  if (!input.descricaoRevisada.trim()) {
+    return { error: 'A descrição revisada não pode estar vazia.' }
+  }
+  if (input.descricaoBruta.length > 5000) {
+    return { error: 'Descrição dos fatos excede 5.000 caracteres.' }
+  }
+  if (input.descricaoRevisada.length > 5000) {
+    return { error: 'Descrição revisada excede 5.000 caracteres.' }
+  }
+  if (input.ocorrencias.length > 1000) {
+    return { error: 'Observações excedem 1.000 caracteres.' }
+  }
+  if (input.outrosIntegrantes.length > 500) {
+    return { error: 'Outros integrantes excede 500 caracteres.' }
+  }
+
+  const admin = createAdminClient()
+
+  const { data: op } = await admin
+    .from('operadores')
+    .select('perfil, gaep_id')
+    .eq('id', input.operadorId)
+    .single()
+
+  const opRow = op as { perfil: string; gaep_id: string } | null
+  if (!opRow) return { error: 'Operador não encontrado.' }
+
+  const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(opRow.perfil ?? '')
+
+  const { data: relAtual, error: relErr } = await admin
+    .from('relatorios')
+    .select('id, gaep_id, relatorista_id, descricao_revisada, versao')
+    .eq('id', input.id)
+    .is('deleted_at', null)
+    .single()
+
+  if (relErr || !relAtual) {
+    return { error: 'Relatório não encontrado.' }
+  }
+
+  const rel = relAtual as {
+    id: string
+    gaep_id: string
+    relatorista_id: string | null
+    descricao_revisada: string
+    versao: number
+  }
+
+  if (rel.gaep_id !== opRow.gaep_id) {
+    return { error: 'Acesso negado.' }
+  }
+  if (!isAdmin && rel.relatorista_id !== input.operadorId) {
+    return { error: 'Apenas o relatorista ou um administrador pode editar este relatório.' }
+  }
+
+  const fotosParaGravar = normalizeFotosUrls(input.fotosUrls)
+  const descAntes = rel.descricao_revisada.trim()
+  const descDepois = input.descricaoRevisada.trim()
+  const novaVersao = rel.versao + 1
+
+  if (descAntes !== descDepois) {
+    const { error: verErr } = await admin.from('relatorio_versoes').insert({
+      relatorio_id: input.id,
+      editado_por_id: input.operadorId,
+      versao: rel.versao,
+      descricao_anterior: descAntes,
+      descricao_nova: descDepois,
+      motivo: 'Edição completa do relatório',
+    })
+    if (verErr) {
+      console.error('[atualizarRelatorioCompleto] relatorio_versoes:', verErr)
+      return { error: verErr.message ?? 'Falha ao registrar versão.' }
+    }
+  }
+
+  const { error: updErr } = await admin
+    .from('relatorios')
+    .update({
+      data: input.data,
+      hora_inicio: input.horaInicio || null,
+      hora_fim: input.horaFim || null,
+      horas_totais: input.horasTotais > 0 ? input.horasTotais : null,
+      categoria_id: input.categoriaId || null,
+      atividade_id: input.atividadeId || null,
+      outros_integrantes: input.outrosIntegrantes.trim() || null,
+      descricao_bruta: input.descricaoBruta.trim() || null,
+      descricao_revisada: descDepois,
+      ocorrencias: input.ocorrencias.trim() || null,
+      fotos_urls: fotosParaGravar.length > 0 ? fotosParaGravar : null,
+      versao: novaVersao,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.id)
+
+  if (updErr) {
+    return { error: updErr.message ?? 'Falha ao atualizar o relatório.' }
+  }
+
+  await admin.from('relatorio_participantes').delete().eq('relatorio_id', input.id)
+
+  if (input.equipe.length > 0) {
+    const { error: partError } = await admin.from('relatorio_participantes').insert(
+      input.equipe.map((operadorId) => ({
+        relatorio_id: input.id,
+        operador_id: operadorId,
+        hora_inicio: input.horaInicio || null,
+        hora_fim: input.horaFim || null,
+        horas_totais: input.horasTotais > 0 ? input.horasTotais : null,
+      }))
+    )
+    if (partError) {
+      console.error('[atualizarRelatorioCompleto] participantes:', partError)
+    }
+  }
+
+  revalidatePath(`/relatorio/${input.id}`)
+  revalidatePath(`/relatorio/${input.id}/editar`)
+  revalidatePath('/relatorio/historico')
+  revalidatePath('/relatorio')
+  revalidateTag('relatorios-kpi')
+  return {}
+}
+
+/** Realiza soft delete de um relatório. Admin ou o próprio relatorista. */
 export async function excluirRelatorio(input: {
   id: string
   operadorId: string
@@ -613,8 +789,22 @@ export async function excluirRelatorio(input: {
     .single()
 
   const perfilOp = (op as { perfil: string } | null)?.perfil ?? ''
-  if (!['ADMIN', 'SUPER_ADMIN'].includes(perfilOp)) {
-    return { error: 'Apenas administradores podem excluir relatórios.' }
+  const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(perfilOp)
+
+  const { data: relRow, error: relErr } = await admin
+    .from('relatorios')
+    .select('relatorista_id')
+    .eq('id', input.id)
+    .is('deleted_at', null)
+    .single()
+
+  if (relErr || !relRow) {
+    return { error: 'Relatório não encontrado.' }
+  }
+
+  const relatoristaId = (relRow as { relatorista_id: string | null }).relatorista_id
+  if (!isAdmin && relatoristaId !== input.operadorId) {
+    return { error: 'Apenas o relatorista ou um administrador pode excluir este relatório.' }
   }
 
   const { error: delErr } = await admin

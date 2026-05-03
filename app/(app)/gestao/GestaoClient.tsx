@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
+import { useVariavelMes, cargaHorariaTotalHoras } from '@/lib/variavelMes'
 import { useSearchParams } from 'next/navigation'
 import {
   criarOperador,
@@ -22,6 +23,7 @@ import {
   toggleAtivoGaep,
   importarRelatoriosCsv,
 } from './actions'
+import { DEFAULT_TITULO_RELATORIO_INSTITUCIONAL } from '@/lib/pdf/defaultTituloRelatorio'
 
 // ── Tipos públicos ────────────────────────────────────────────
 
@@ -1000,6 +1002,22 @@ function TabFeriados({
   })
   const [toast, setToast] = useState('')
   const [pending, startTransition] = useTransition()
+  const { upsertDiasUteisMes, setMesReferenciaFiltro } = useVariavelMes()
+  const [linhaDraft, setLinhaDraft] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    setMesReferenciaFiltro(formDiasUteis.referenciaMes)
+  }, [formDiasUteis.referenciaMes, setMesReferenciaFiltro])
+
+  useEffect(() => {
+    setLinhaDraft((prev) => {
+      const next = { ...prev }
+      for (const d of diasUteisMes) {
+        next[d.referenciaMes] = String(d.diasUteis)
+      }
+      return next
+    })
+  }, [diasUteisMes])
 
   function showToast(msg: string) {
     setToast(msg)
@@ -1038,19 +1056,44 @@ function TabFeriados({
     startTransition(async () => {
       const res = await salvarDiasUteisMes(gaepId, referenciaMes, diasUteis)
       if (res.error) { showToast(`❌ ${res.error}`); return }
+      const diasFinal = Math.max(0, Math.min(31, Math.round(diasUteis)))
       setDiasUteisMes((prev) => {
         const next = [...prev]
         const idx = next.findIndex((r) => r.referenciaMes === referenciaMes)
         const row: DiasUteisMesRow = {
           id: idx >= 0 ? next[idx].id : `${referenciaMes}-${gaepId}`,
           referenciaMes,
-          diasUteis: Math.max(0, Math.min(31, Math.round(diasUteis))),
+          diasUteis: diasFinal,
         }
         if (idx >= 0) next[idx] = row
         else next.push(row)
         return next.sort((a, b) => b.referenciaMes.localeCompare(a.referenciaMes))
       })
+      upsertDiasUteisMes(referenciaMes, diasFinal)
       showToast('✅ Dias úteis do mês salvos!')
+    })
+  }
+
+  function salvarDiasUteisLinha(referenciaMes: string, diasBruto: number) {
+    if (!/^\d{4}-\d{2}$/.test(referenciaMes) || !Number.isFinite(diasBruto)) return
+    startTransition(async () => {
+      const res = await salvarDiasUteisMes(gaepId, referenciaMes, diasBruto)
+      if (res.error) { showToast(`❌ ${res.error}`); return }
+      const diasFinal = Math.max(0, Math.min(31, Math.round(diasBruto)))
+      setDiasUteisMes((prev) => {
+        const next = [...prev]
+        const idx = next.findIndex((r) => r.referenciaMes === referenciaMes)
+        const row: DiasUteisMesRow = {
+          id: idx >= 0 ? next[idx].id : `${referenciaMes}-${gaepId}`,
+          referenciaMes,
+          diasUteis: diasFinal,
+        }
+        if (idx >= 0) next[idx] = row
+        else next.push(row)
+        return next.sort((a, b) => b.referenciaMes.localeCompare(a.referenciaMes))
+      })
+      upsertDiasUteisMes(referenciaMes, diasFinal)
+      showToast(`✅ ${referenciaMes} atualizado`)
     })
   }
 
@@ -1109,13 +1152,69 @@ function TabFeriados({
             Esses valores alimentam o cálculo de carga horária prevista (7h × dias úteis) e saldo mensal no desempenho do operador.
           </div>
           {diasUteisMes.length > 0 && (
-            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
-              {diasUteisMes.slice(0, 6).map((d) => (
-                <div key={d.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 10px', background: '#f8fafc' }}>
-                  <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>{d.referenciaMes}</div>
-                  <div style={{ fontSize: '0.88rem', color: '#1e293b', fontWeight: 800 }}>{d.diasUteis} dias úteis</div>
-                </div>
-              ))}
+            <div
+              style={{
+                marginTop: 12,
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, minmax(0,1fr))',
+                gap: 8,
+                maxHeight: 320,
+                overflowY: 'auto',
+              }}
+            >
+              {diasUteisMes.map((d) => {
+                const raw = linhaDraft[d.referenciaMes] ?? String(d.diasUteis)
+                const n = Number(raw)
+                const horasTotais = Number.isFinite(n) ? cargaHorariaTotalHoras(n) : 0
+                return (
+                  <div
+                    key={d.id}
+                    style={{
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 8,
+                      padding: '10px 10px',
+                      background: '#f8fafc',
+                      display: 'grid',
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 700 }}>{d.referenciaMes}</div>
+                    <label style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 700 }}>
+                      Dias úteis
+                      <input
+                        type="number"
+                        min={0}
+                        max={31}
+                        value={raw}
+                        onChange={(e) =>
+                          setLinhaDraft((prev) => ({ ...prev, [d.referenciaMes]: e.target.value }))
+                        }
+                        style={{ ...mInput, marginTop: 4 }}
+                      />
+                    </label>
+                    <div style={{ fontSize: '0.82rem', color: '#1a237e', fontWeight: 700 }}>
+                      Carga do mês: {Number.isFinite(n) ? `${horasTotais} h` : '—'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => salvarDiasUteisLinha(d.referenciaMes, n)}
+                      disabled={pending || !Number.isFinite(n)}
+                      style={{
+                        padding: '8px 10px',
+                        background: pending || !Number.isFinite(n) ? '#94a3b8' : '#1a237e',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 8,
+                        fontWeight: 700,
+                        cursor: pending || !Number.isFinite(n) ? 'not-allowed' : 'pointer',
+                        fontSize: '0.78rem',
+                      }}
+                    >
+                      Salvar
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
@@ -1550,33 +1649,35 @@ function PreviewRelatorio({ cfg, gaepCodigo }: { cfg: ConfigRelatorioUIData; gae
   const tStyle: React.CSSProperties = {
     fontFamily: cfg.tituloEstilo.fontFamily,
     color: cfg.tituloEstilo.fontColor,
-    textAlign: cfg.tituloEstilo.align,
+    textAlign: 'center',
     marginLeft: `${cfg.tituloEstilo.indent}px`,
-    lineHeight: cfg.tituloEstilo.lineHeight,
-    fontSize: `${cfg.tituloEstilo.fontSize ?? 12}pt`,
+    lineHeight: 1.15,
+    fontSize: '13.5pt',
     fontWeight: cfg.tituloEstilo.bold === false ? 'normal' : 'bold',
     fontStyle: cfg.tituloEstilo.italic ? 'italic' : 'normal',
     textDecoration: cfg.tituloEstilo.underline ? 'underline' : 'none',
     marginTop: cfg.tituloEstilo.marginTop ? `${cfg.tituloEstilo.marginTop}mm` : undefined,
-    marginBottom: cfg.tituloEstilo.marginBottom !== undefined ? `${cfg.tituloEstilo.marginBottom}mm` : '2mm',
+    marginBottom: 0,
     textTransform: 'uppercase',
-    letterSpacing: '1px',
+    letterSpacing: '0.05em',
     whiteSpace: 'pre-line',
+    overflowWrap: 'break-word',
+    wordWrap: 'break-word',
   }
   const stStyle: React.CSSProperties = {
     fontFamily: cfg.subtituloEstilo.fontFamily,
     color: cfg.subtituloEstilo.fontColor,
-    textAlign: cfg.subtituloEstilo.align,
+    textAlign: 'center',
     marginLeft: `${cfg.subtituloEstilo.indent}px`,
-    lineHeight: cfg.subtituloEstilo.lineHeight,
-    fontSize: `${cfg.subtituloEstilo.fontSize ?? 11}pt`,
-    fontWeight: cfg.subtituloEstilo.bold ? 'bold' : 'normal',
+    lineHeight: 1.22,
+    fontSize: '10pt',
+    fontWeight: cfg.subtituloEstilo.bold === false ? 'normal' : 'bold',
     fontStyle: cfg.subtituloEstilo.italic ? 'italic' : 'normal',
     textDecoration: cfg.subtituloEstilo.underline ? 'underline' : 'none',
-    marginTop: cfg.subtituloEstilo.marginTop ? `${cfg.subtituloEstilo.marginTop}mm` : undefined,
-    marginBottom: cfg.subtituloEstilo.marginBottom !== undefined ? `${cfg.subtituloEstilo.marginBottom}mm` : '3mm',
-    borderBottom: '1.5px solid #333',
-    paddingBottom: '2mm',
+    marginTop: '8pt',
+    marginBottom: 0,
+    paddingBottom: '7pt',
+    borderBottom: '1.25px solid #334155',
   }
   const dStyle: React.CSSProperties = {
     fontFamily: cfg.descricaoEstilo.fontFamily,
@@ -1591,21 +1692,6 @@ function PreviewRelatorio({ cfg, gaepCodigo }: { cfg: ConfigRelatorioUIData; gae
     marginTop: cfg.descricaoEstilo.marginTop ? `${cfg.descricaoEstilo.marginTop}mm` : undefined,
     marginBottom: cfg.descricaoEstilo.marginBottom !== undefined ? `${cfg.descricaoEstilo.marginBottom}mm` : undefined,
   }
-  const rStyle: React.CSSProperties = {
-    fontFamily: cfg.rodapeEstilo.fontFamily,
-    color: cfg.rodapeEstilo.fontColor,
-    textAlign: cfg.rodapeEstilo.align,
-    marginLeft: `${cfg.rodapeEstilo.indent}px`,
-    lineHeight: cfg.rodapeEstilo.lineHeight,
-    fontSize: `${cfg.rodapeEstilo.fontSize ?? 8}pt`,
-    fontWeight: cfg.rodapeEstilo.bold ? 'bold' : 'normal',
-    fontStyle: cfg.rodapeEstilo.italic ? 'italic' : 'normal',
-    textDecoration: cfg.rodapeEstilo.underline ? 'underline' : 'none',
-    marginTop: cfg.rodapeEstilo.marginTop ? `${cfg.rodapeEstilo.marginTop}mm` : undefined,
-    borderTop: '1px solid #ccc',
-    paddingTop: '2mm',
-  }
-
   return (
     <div style={{ background: '#64748b', padding: 8, borderRadius: 8, marginTop: 14 }}>
       <div style={{ fontSize: '0.68rem', color: '#e2e8f0', fontWeight: 700, textAlign: 'center', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
@@ -1642,16 +1728,165 @@ function PreviewRelatorio({ cfg, gaepCodigo }: { cfg: ConfigRelatorioUIData; gae
               overflow: 'hidden',
             }}
           >
-            <div style={tStyle}>{cfg.tituloTexto || 'RELATÓRIO OPERACIONAL'}</div>
-            <div style={stStyle}>{cfg.subtituloTexto || 'RELATÓRIO DE ATIVIDADE(S)'}</div>
-            <div style={{ fontSize: '9pt', color: '#333', marginBottom: '4mm' }}>
-              Data: 29/04/2026 | 08:00 às 16:00 | Categoria: OPERAR | Atividade: Escolta
+            {/* Cabeçalho: título + subtítulo à esquerda, reserva à direita (brasão no PDF) */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1fr) 120px',
+                columnGap: '4mm',
+                alignItems: 'start',
+                marginBottom: '3mm',
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={tStyle}>{cfg.tituloTexto || DEFAULT_TITULO_RELATORIO_INSTITUCIONAL}</div>
+                <div style={stStyle}>INSTRUIR — Patrulhamento</div>
+              </div>
+              <div style={{ minHeight: 90 }} aria-hidden />
             </div>
-            <div style={{ ...dStyle, flex: 1, overflow: 'hidden' }}>
-              {cfg.descricaoTexto || 'O texto do relatório operacional será exibido aqui com a formatação configurada pelo administrador do sistema.'}
+            {/* Legenda operacional (espelha PDF: 5 colunas) */}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                width: '100%',
+                marginBottom: '3mm',
+                border: '0.6pt solid #94a3b8',
+                borderRadius: 2,
+                overflow: 'hidden',
+                background: '#fff',
+              }}
+            >
+              {[
+                { label: 'Data', value: '02/05/2026' },
+                { label: 'Período', value: '08:00 às 15:00' },
+                { label: 'Duração', value: '7h' },
+                { label: 'Categoria', value: 'INSTRUIR' },
+                { label: 'Atividade', value: 'Patrulhamento' },
+              ].map((cell, i, arr) => (
+                <div
+                  key={cell.label}
+                  style={{
+                    flex: '1 1 18%',
+                    minWidth: 0,
+                    borderRight: i < arr.length - 1 ? '0.5pt solid #cbd5e1' : undefined,
+                  }}
+                >
+                  <div
+                    style={{
+                      background: '#dbeafe',
+                      color: '#475569',
+                      fontSize: '6.25pt',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.055em',
+                      padding: '3pt 5pt',
+                      borderBottom: '0.5pt solid #94a3b8',
+                    }}
+                  >
+                    {cell.label}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '8.25pt',
+                      fontWeight: 700,
+                      color: '#0f172a',
+                      padding: '4pt 5pt 5pt 5pt',
+                      lineHeight: 1.32,
+                    }}
+                  >
+                    {cell.value}
+                  </div>
+                </div>
+              ))}
             </div>
-            <div style={rStyle}>
-              {cfg.rodapeTexto.replace('{{GAEP}}', gaepCodigo).replace('{{VERSAO}}', '1')} · Emitido em 29/04/2026
+            {/* Bloco descrição: borda + equipe + rótulo + texto (espelha PDF) */}
+            <div
+              style={{
+                border: '0.75pt solid #0f172a',
+                padding: '12pt 14pt 14pt 14pt',
+                marginBottom: '3mm',
+                background: '#fff',
+              }}
+            >
+              <div style={{ fontSize: '9.5pt', color: '#0f172a', lineHeight: 1.4, marginBottom: '6pt', fontWeight: 500 }}>
+                Alex, Boza, Ernesto, Fiorentini, Hachid, Maia, Minotto, Regis, Rocco, Stadler
+              </div>
+              <div
+                style={{
+                  fontSize: '8pt',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  color: '#64748b',
+                  marginTop: '8pt',
+                  marginBottom: '6pt',
+                }}
+              >
+                DESCRIÇÃO DA ATIVIDADE
+              </div>
+              <div style={{ ...dStyle, whiteSpace: 'pre-wrap' as const, margin: 0 }}>
+                {cfg.descricaoTexto ||
+                  'O texto do relatório operacional será exibido aqui com a formatação configurada pelo administrador do sistema.'}
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 4 }} />
+            <div style={{ textAlign: 'center', marginBottom: '3mm' }}>
+              <div style={{ marginBottom: '5pt', fontSize: '10.5pt', fontWeight: 700, color: '#0f172a' }}>Hachid</div>
+              <div style={{ borderTop: '0.6pt solid #0f172a', width: '55%', margin: '0 auto', height: 0 }} />
+              <div style={{ fontSize: '7pt', color: '#64748b', marginTop: '4pt' }}>Relatorista — assinatura</div>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'flex-end',
+                justifyContent: 'space-between',
+                gap: '8pt',
+                borderTop: '0.5pt solid #cbd5e1',
+                paddingTop: '8pt',
+                paddingBottom: '6mm',
+                marginBottom: '2mm',
+              }}
+            >
+              <div
+                style={{
+                  flex: 1,
+                  fontSize: '8pt',
+                  lineHeight: 1.38,
+                  color: 'rgba(0,0,0,0.44)',
+                  textAlign: 'left',
+                  paddingRight: '2mm',
+                  paddingBottom: '1mm',
+                }}
+              >
+                <div style={{ marginBottom: '4pt', wordBreak: 'break-all' as const }}>
+                  <strong style={{ color: 'rgba(0,0,0,0.58)' }}>Autenticidade:</strong> CD62F139C051BF61
+                </div>
+                <div>
+                  Gerado em: 02/05/2026, 19:41 · v1 ·{' '}
+                  {cfg.rodapeTexto.replace('{{GAEP}}', gaepCodigo).replace('{{VERSAO}}', '1')}
+                </div>
+              </div>
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  flexShrink: 0,
+                  background: '#f1f5f9',
+                  border: '0.5pt solid #cbd5e1',
+                  fontSize: '6pt',
+                  color: '#94a3b8',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textAlign: 'center',
+                  lineHeight: 1.1,
+                }}
+              >
+                QR
+              </div>
             </div>
           </div>
         </div>
@@ -1849,7 +2084,7 @@ function TabRelatorio({
                   value={cfg.tituloTexto}
                   onChange={(e) => setCfg((prev) => ({ ...prev, tituloTexto: e.target.value }))}
                   style={{ ...mInput, resize: 'vertical' }}
-                  placeholder={'POLÍCIA PENAL FEDERAL\nPENITENCIÁRIA FEDERAL EM CATANDUVAS-PR\nGRUPO DE AÇÕES ESPECIAIS PENAIS-CATANDUVAS'}
+                  placeholder={DEFAULT_TITULO_RELATORIO_INSTITUCIONAL}
                 />
               </FormField>
               <StyleEditor
@@ -1864,7 +2099,8 @@ function TabRelatorio({
           {subTab === 'subtitulo' && (
             <>
               <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.6, marginBottom: 10 }}>
-                Tipo do documento — aparece abaixo do título, acima da legenda de metadados.
+                Tipo do documento — aparece abaixo do título, acima da legenda. Placeholders opcionais:{' '}
+                <code>{'{{CATEGORIA}}'}</code>, <code>{'{{ATIVIDADE}}'}</code>, <code>{'{{GAEP}}'}</code>.
               </div>
               <FormField label="Texto do Subtítulo">
                 <input
@@ -2009,15 +2245,9 @@ function TabRelatorio({
 
 // ── Tab: Diárias ──────────────────────────────────────────────
 
-function TabDiarias({
-  initial,
-  gaepId,
-  operadorId,
-}: {
-  initial: DiariaRow[]
-  gaepId: string
-  operadorId: string
-}) {
+function TabDiarias({ initial, gaepId, operadorId }: { initial: DiariaRow[]; gaepId: string; operadorId: string }) {
+  void gaepId
+  void operadorId
   const [diarias, setDiarias] = useState<DiariaRow[]>(initial)
   const [editando, setEditando] = useState<string | null>(null)
   const [form, setForm] = useState<{ locais: string; valor: number }>({ locais: '', valor: 0 })
@@ -2492,6 +2722,13 @@ interface Tab {
 export function GestaoClient({ data }: { data: GestaoData }) {
   const isSuperAdmin = data.operadorAtual.perfil === 'SUPER_ADMIN'
   const searchParams = useSearchParams()
+  const { mergeDiasUteisMes } = useVariavelMes()
+
+  useEffect(() => {
+    mergeDiasUteisMes(
+      data.diasUteisMes.map((r) => ({ referenciaMes: r.referenciaMes, diasUteis: r.diasUteis }))
+    )
+  }, [data.diasUteisMes, mergeDiasUteisMes])
 
   const tabs: Tab[] = [
     {
@@ -2548,7 +2785,7 @@ export function GestaoClient({ data }: { data: GestaoData }) {
   ]
 
   const tabParam = searchParams?.get('tab') ?? 'efetivo'
-  const current = useMemo(() => tabs.find((t) => t.id === tabParam) ?? tabs[0], [tabParam, tabs])
+  const current = tabs.find((t) => t.id === tabParam) ?? tabs[0]
 
   return (
     <div style={{ paddingBottom: 30 }}>

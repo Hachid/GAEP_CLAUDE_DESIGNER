@@ -47,15 +47,6 @@ function formatarDataHoraLocal(iso: string): string {
   })
 }
 
-function slugNomeArquivo(s: string, maxLen = 55): string {
-  const t = s
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .replace(/[^a-zA-Z0-9]+/g, '_')
-    .replace(/^_|_$/g, '')
-  return (t || 'relatorio').slice(0, maxLen)
-}
-
 function renderRodape(texto: string, gaepCodigo: string, versao: number): string {
   return texto.replaceAll('{{GAEP}}', gaepCodigo).replaceAll('{{VERSAO}}', String(versao))
 }
@@ -96,6 +87,9 @@ export async function GET(
   const tracePerf = process.env.NODE_ENV !== 'production'
   const t0 = tracePerf ? Date.now() : 0
   if (tracePerf) console.log('[PDF][perf] start', id)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[PDF][on-demand] gerando PDF sob demanda:', id)
+  }
 
   const supabase = await createClient()
   const {
@@ -239,8 +233,6 @@ export async function GET(
   const emitidoAgora = formatarDataHoraLocal(new Date().toISOString())
   const rodapeRender = renderRodape(config.rodapeTexto, operador.gaeps.nome, rel.versao)
 
-  const nomeArquivo = `${dataFmt.replace(/\//g, '-')}_${slugNomeArquivo(`${categoriaNome}_${atividadeNome}`)}.pdf`
-
   if (tracePdfFotos) {
     console.log('[PDF][fotos] sending to builder count:', fotoDataUrlsPdf.length)
   }
@@ -294,10 +286,10 @@ export async function GET(
   }
   if (tracePerf) console.log('[PDF][perf] after pdf:', Date.now() - t0)
 
-  const filenameDownload = `relatorio-${id}.pdf`
+  const filenamePdf = `relatorio-${id}.pdf`
   const disposition = shouldDownload
-    ? `attachment; filename="${filenameDownload}"`
-    : `inline; filename="${nomeArquivo}"`
+    ? `attachment; filename="${filenamePdf}"`
+    : `inline; filename="${filenamePdf}"`
 
   return new NextResponse(Buffer.from(buffer), {
     status: 200,

@@ -3,6 +3,18 @@
 
 ---
 
+## Contexto atual do sistema (mai/2026)
+
+- O fluxo de relatório já está implementado com persistência em `relatorios` e `relatorio_participantes`.
+- Salvamento principal ocorre em `app/relatorio/actions.ts` com:
+  - `INSERT relatorios` (gaep, relatorista, data, horários, atividade/categoria, descrição, observações, fotos),
+  - `INSERT relatorio_participantes` (quando equipe foi selecionada),
+  - `INSERT audit_log` (fire-and-forget),
+  - `revalidateTag('relatorios-kpi')` para atualizar dashboard/indicadores.
+- A rota `app/api/ia/route.ts` já faz integração para redação assistida.
+- O módulo de revisão e componentes da área de relatório já estão ativos (`AreaRevisao`, `DescricaoMic`, etc.).
+- Este prompt representa a etapa original; para evolução atual, focar em melhoria de qualidade, testes e regras de negócio, não em criação inicial.
+
 Etapa 1 (Login) está funcionando. Vou implementar a **Etapa 2: Tela de Registro de Operação**.
 
 Siga o `CLAUDE.md` (TDD completo, soft delete, audit log).

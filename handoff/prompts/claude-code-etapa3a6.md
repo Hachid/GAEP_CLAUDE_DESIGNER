@@ -3,6 +3,18 @@
 
 ---
 
+## Contexto atual do sistema (mai/2026)
+
+- As etapas 3-6 já foram implementadas e estão em evolução contínua.
+- Dashboard (`app/(app)/dashboard`) usa `fetchKPIData` e `fetchEvolucao` com cache de 60s e tag `relatorios-kpi`.
+- Gráfico "Evolução de Horas por Mês" (`components/dashboard/EvolucaoLinhas.tsx`) é alimentado por dados derivados:
+  - base em `relatorios` + `relatorio_participantes`,
+  - meta mensal via `gaep_dias_uteis` (`dias_uteis * 7h`),
+  - série por operador criada em memória (`porOperador` -> `dataKey={op.id}`), não como coluna fixa no banco.
+- Gestão (`app/(app)/gestao`) mantém `gaep_dias_uteis`, `config_ia`, `config_relatorio`, efetivo, atividades, feriados e diárias.
+- Variável do mês está centralizada em `lib/variavelMes` (`VariavelMesContext`, `calc.ts`) e sincroniza referência mensal para filtros/carga prevista.
+- Para novas tasks, tratar este documento como base histórica e trabalhar por refinamentos incrementais (performance, testes, consistência de dados e UX).
+
 ## ETAPA 3 — Painel BI (`app/(app)/dashboard/page.tsx`)
 
 Implemente o Painel BI do GAEP seguindo o protótipo em `handoff/design/GAEP Prototype.html` (menu "Painel BI").
