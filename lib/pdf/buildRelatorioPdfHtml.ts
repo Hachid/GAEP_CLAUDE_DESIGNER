@@ -19,6 +19,8 @@ export type RelatorioPdfHtmlModel = {
   operadoresStr: string
   outrosIntegrantes: string | null
   relatoristaNome: string | null
+  /** Nome completo do relatorista; quando existir, usado no rodapé em preferência a `relatoristaNome`. */
+  relatoristaNomeCompleto?: string | null
   descricaoPrefix: string
   descricao: string
   ocorrencias: string | null
@@ -96,24 +98,41 @@ export function buildRelatorioPdfHtml(m: RelatorioPdfHtmlModel): string {
     ? m.fotoDataUrls.filter((src) => typeof src === 'string' && src.startsWith('data:image/'))
     : []
 
+  const nFotos = validFotoDataUrls.length
+  const fotosGridClass =
+    nFotos === 1 ? 'fotos-grid fotos-grid--1' : nFotos === 2 ? 'fotos-grid fotos-grid--2' : 'fotos-grid fotos-grid--3'
+
+  const fotosCardsHtml = validFotoDataUrls
+    .map(
+      (src) =>
+        `<div class="foto-card"><img class="foto" src="${imgSrcForPdf(src)}" alt="" onerror="this.onerror=null;this.parentNode.style.display='none'" /></div>`
+    )
+    .join('')
+
   const fotosHtml =
-    validFotoDataUrls.length === 0
+    nFotos === 0
       ? ''
       : `
   <section class="secao-fotos" aria-label="Fotos">
-    <div class="secao-fotos-titulo">Registros fotográficos</div>
-    <div class="fotos-area">
-      <div class="fotos">
-        ${validFotoDataUrls.map((src) => `<img class="foto" src="${imgSrcForPdf(src)}" alt="" />`).join('')}
+    <div class="fotos-bloco-unido">
+      <div class="secao-fotos-titulo">REGISTROS FOTOGRÁFICOS</div>
+      <div class="fotos-area">
+        <div class="${fotosGridClass}">
+          ${fotosCardsHtml}
+        </div>
       </div>
     </div>
   </section>`
+
+  const relatoristaParaRodape =
+    (m.relatoristaNomeCompleto ?? m.relatoristaNome ?? '').trim() || '—'
 
   const timbradoHtml = m.timbradoDataUrl
     ? `<img class="timbrado" src="${imgSrcForPdf(m.timbradoDataUrl)}" alt="" />`
     : ''
 
-  const subtituloConteudo = m.subtituloLinha.trim() ? escapeHtml(m.subtituloLinha) : '&#160;'
+  /** Texto fixo do subtítulo no PDF (substitui categoria/atividade, ex.: INSTRUIR — Administrativo). */
+  const subtituloConteudo = escapeHtml('Relatório de Atividades - GAEP-CAT')
 
   const legendaHtml = [
     celulaLegenda('Data', m.dataLegenda),
@@ -123,7 +142,15 @@ export function buildRelatorioPdfHtml(m: RelatorioPdfHtmlModel): string {
     celulaLegenda('Atividade', m.atividadeLegenda),
   ].join('\n')
 
-  const padBottomMm = (Number.isFinite(Number(mrg.bottom)) ? Number(mrg.bottom) : 24) + 5
+  const mrgBottomNum = Number.isFinite(Number(mrg.bottom)) ? Number(mrg.bottom) : 24
+  /**
+   * Ancoragem do rodapé fixo na faixa marrom/escura do timbrado (perto da borda da folha).
+   * Não reutilizar `mrg.bottom` aqui: esse valor reserva a área clara de texto e empurra o rodapé para cima,
+   * deixando Relatorista/Autenticidade na zona branca.
+   */
+  const footerDockBottomMm = 5
+  /** Reserva no fluxo para não sobrepor o bloco do rodapé (altura aprox. + dock). */
+  const conteudoPadBottomMm = Math.max(mrgBottomNum + 18, footerDockBottomMm + 32)
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -139,44 +166,38 @@ export function buildRelatorioPdfHtml(m: RelatorioPdfHtmlModel): string {
     html, body {
       margin: 0;
       padding: 0;
+      width: 210mm;
       min-height: 297mm;
       max-width: 210mm;
       overflow-x: hidden;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-    /* Timbrado: preenche a folha A4 (100%). object-fit: fill evita faixas brancas nas bordas. */
+    /* Timbrado: camada inferior, folha inteira A4 (inclui faixa escura inferior). */
     img.timbrado {
       position: fixed;
       top: 0;
       left: 0;
       width: 210mm;
+      min-width: 210mm;
       height: 297mm;
+      min-height: 297mm;
       object-fit: fill;
+      object-position: center top;
       z-index: 0;
       pointer-events: none;
     }
     .conteudo {
       position: relative;
       z-index: 1;
-      padding: ${mrg.top}mm ${mrg.right}mm ${padBottomMm}mm ${mrg.left}mm;
-      min-height: 297mm;
+      padding: ${mrg.top}mm ${mrg.right}mm ${conteudoPadBottomMm}mm ${mrg.left}mm;
+      min-height: auto;
       width: 100%;
       max-width: 100%;
-      display: flex;
-      flex-direction: column;
       box-sizing: border-box;
     }
-    .pagina-flex {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-height: 100%;
-    }
     .fluxo-principal {
-      flex: 1 1 auto;
-      min-height: 0;
-      padding-bottom: 5mm;
+      padding-bottom: 2mm;
     }
     /* Cabeçalho: texto só na coluna esquerda; coluna direita reserva área do brasão do timbrado. */
     .cabecalho-bloco {
@@ -223,46 +244,55 @@ export function buildRelatorioPdfHtml(m: RelatorioPdfHtmlModel): string {
       letter-spacing: 0.02em !important;
       text-align: center !important;
     }
-    /* Legenda operacional: sempre 5 colunas (A4). */
+    /* Legenda: 5 colunas, sem caixa (só tipografia sobre o timbrado). */
     .meta-legenda {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
+      column-gap: 4pt;
       width: 100%;
       margin: 2pt 0 12pt 0;
-      border: 0.6pt solid #94a3b8;
-      border-radius: 2pt;
-      overflow: hidden;
-      background: #fff;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+      background: transparent !important;
+      border-radius: 0;
+      overflow: visible;
     }
     .meta-celula {
       min-width: 0;
-      border-right: 0.5pt solid #cbd5e1;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+      background: transparent !important;
     }
-    .meta-celula:last-child { border-right: none; }
     .meta-celula-head {
-      background: #dbeafe;
+      background: transparent !important;
       color: #475569;
       font-size: 6.25pt;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.055em;
-      padding: 3pt 5pt;
-      border-bottom: 0.5pt solid #94a3b8;
+      padding: 0 0 2pt 0;
+      border: none !important;
     }
     .meta-celula-val {
       font-size: 8.25pt;
       font-weight: 700;
       color: #0f172a;
-      padding: 4pt 5pt 5pt 5pt;
+      padding: 0 0 2pt 0;
       line-height: 1.32;
       word-wrap: break-word;
+      background: transparent !important;
+      border: none !important;
     }
-    /* Descrição: hierarquia e respiro interno. */
+    /* Descrição: sem caixa; texto sobre o timbrado. */
     .bloco-descricao-inst {
-      border: 0.75pt solid #0f172a;
-      padding: 12pt 14pt 14pt 14pt;
-      margin: 0 0 12pt 0;
-      background: #fff;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+      background: transparent !important;
+      padding: 12pt 0 16pt 0;
+      margin: 0 0 14pt 0;
     }
     .equipe-linha {
       font-size: 9.5pt;
@@ -296,129 +326,163 @@ export function buildRelatorioPdfHtml(m: RelatorioPdfHtmlModel): string {
       overflow-wrap: break-word;
       box-sizing: border-box;
       margin: 0;
+      padding: 0 0 3pt 0;
       orphans: 2;
       widows: 2;
     }
     .bloco-ocorrencias {
       margin: 0 0 12pt 0;
-      padding: 0 0 0 8pt;
-      border-left: 2.5pt solid #64748b;
+      padding: 0;
+      border: none !important;
+      background: transparent !important;
     }
     .bloco-texto { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; margin-bottom: 10pt; }
+    /* Fotos: título + grade ficam juntos (evita título órfão); cards não cortam ao meio. */
     .secao-fotos {
-      margin: 0 0 10mm 0;
+      margin: 12pt 0 8mm 0;
+      break-inside: auto;
+      page-break-inside: auto;
+    }
+    .fotos-bloco-unido {
       break-inside: avoid;
       page-break-inside: avoid;
     }
     .secao-fotos-titulo {
-      font-size: 8pt;
+      font-size: 8.25pt;
       font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: #4338ca;
-      margin: 0 0 4pt 0;
+      letter-spacing: 0.1em;
+      color: #172554;
+      margin: 0 0 6px 0;
+      padding-bottom: 0;
+      border: none !important;
+      break-after: avoid;
+      page-break-after: avoid;
     }
     .fotos-area {
-      border: 0.6pt solid #a5b4fc;
-      padding: 8pt;
-      background: #fafaff;
-      border-radius: 2pt;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+      background: transparent !important;
+      padding: 4px 0 0 0;
+      border-radius: 0;
     }
-    .fotos {
-      display: flex;
-      flex-direction: row;
-      flex-wrap: wrap;
-      gap: 8pt 8pt;
-      align-items: flex-start;
-      justify-content: center;
-    }
-    img.foto {
-      max-height: 6cm;
-      max-width: 100%;
-      width: auto;
-      height: auto;
-      object-fit: contain;
-      border: 0.5pt solid #bbb;
-      display: block;
-      flex: 0 1 auto;
-    }
-    .rodape {
-      margin-top: auto;
-      flex-shrink: 0;
-      padding-top: 8pt;
-      padding-bottom: 6mm;
-      margin-bottom: 2mm;
-      border-top: 0.5pt solid #cbd5e1;
+    .fotos-grid {
+      display: grid;
+      gap: 6px;
       width: 100%;
+      break-inside: auto;
+      page-break-inside: auto;
+      border: none !important;
+      background: transparent !important;
+    }
+    .fotos-grid--1 {
+      grid-template-columns: minmax(0, 1fr);
+      max-width: 11.5cm;
+      margin: 0 auto;
+    }
+    .fotos-grid--2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .fotos-grid--3 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .fotos-grid--3 .foto-card:nth-child(3) {
+      grid-column: 1 / -1;
+      justify-self: center;
+      width: min(8cm, calc((100% - 6px) / 2));
       max-width: 100%;
+    }
+    .foto-card {
+      box-sizing: border-box;
+      height: 5.4cm;
+      min-height: 5.4cm;
+      padding: 2px;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+      background: transparent !important;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
       break-inside: avoid;
       page-break-inside: avoid;
     }
-    .rodape-assinatura {
-      text-align: center;
-      margin-bottom: 10pt;
+    .foto {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      display: block;
     }
-    .rodape-nome-destaque {
-      margin: 0 0 5pt 0;
-      font-size: 10.5pt;
-      font-weight: 700;
-      color: #0f172a;
-    }
-    .rodape-linha-ass {
-      border-top: 0.6pt solid #0f172a;
-      width: 55%;
-      margin: 0 auto 0 auto;
-      height: 0;
-    }
-    .rodape-cargo {
-      font-size: 7pt;
-      color: #64748b;
-      margin: 4pt 0 0 0;
-    }
-    .rodape-row2 {
+    /* Rodapé fixo ancorado na faixa marrom inferior do timbrado; Chromium repete em cada página. */
+    .rodape-fixo {
+      position: fixed;
+      left: ${mrg.left}mm;
+      right: ${mrg.right}mm;
+      bottom: ${footerDockBottomMm}mm;
+      z-index: 20;
+      min-height: 17mm;
+      margin: 0;
+      padding: 0;
+      border: none;
+      border-top: 0.35pt solid rgba(255, 255, 255, 0.2);
+      box-sizing: border-box;
+      background: transparent;
       display: flex;
-      flex-direction: row;
       align-items: flex-end;
       justify-content: space-between;
-      gap: 10pt;
+      gap: 3mm;
+      color: rgba(255, 255, 255, 0.88);
+      font-size: 7.5pt;
+      line-height: 1.35;
+      break-inside: avoid;
+      page-break-inside: avoid;
     }
-    .rodape-textos {
-      flex: 1;
+    .rodape-info {
+      flex: 1 1 auto;
       min-width: 0;
-      text-align: left;
-      color: rgba(0, 0, 0, 0.44);
-      padding-right: 2mm;
-      padding-bottom: 1mm;
+      max-width: calc(100% - 58px - 3mm);
+      min-height: 15mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      gap: 1.5px;
+      word-break: break-word;
     }
-    .rodape-linha-auth {
-      margin: 0 0 4pt 0;
-      font-size: 8pt;
-      line-height: 1.38;
-      color: rgba(0, 0, 0, 0.44);
+    .rodape-info strong {
+      color: rgba(255, 255, 255, 0.96);
+      font-weight: 700;
+    }
+    .rodape-info-linha-auth {
       word-break: break-all;
     }
-    .rodape-linha-gen {
-      margin: 0;
-      font-size: 8pt;
-      line-height: 1.38;
-      color: rgba(0, 0, 0, 0.44);
+    /* Sem timbrado: rodapé sobre fundo claro */
+    body.pdf-sem-timbrado .rodape-fixo {
+      color: rgba(0, 0, 0, 0.55);
+      border-top: 0.35pt solid rgba(15, 23, 42, 0.15);
     }
-    .rodape-textos strong {
-      font-weight: 700;
-      color: rgba(0, 0, 0, 0.58);
+    body.pdf-sem-timbrado .rodape-info strong {
+      color: rgba(0, 0, 0, 0.72);
     }
-    .rodape-qr-wrap {
-      flex-shrink: 0;
-      align-self: flex-end;
-      padding-bottom: 1mm;
+    /* Contraste do QR sobre faixa escura */
+    .rodape-fixo .qr {
+      width: 54px;
+      height: 54px;
+      flex: 0 0 auto;
+      object-fit: contain;
+      display: block;
+      padding: 2px;
+      background: #fff;
+      border-radius: 2px;
+      box-sizing: content-box;
     }
-    .qr { width: 44pt; height: 44pt; display: block; }
   </style>
 </head>
-<body>
+<body class="${m.timbradoDataUrl ? 'pdf-com-timbrado' : 'pdf-sem-timbrado'}">
   ${timbradoHtml}
   <main class="conteudo">
-    <div class="pagina-flex">
       <div class="fluxo-principal">
         <header class="cabecalho-bloco">
           <div class="cabecalho-texto">
@@ -449,27 +513,17 @@ export function buildRelatorioPdfHtml(m: RelatorioPdfHtmlModel): string {
 
         ${fotosHtml}
       </div>
-
-      <footer class="rodape">
-        <div class="rodape-assinatura">
-          <p class="rodape-nome-destaque">${escapeHtml(m.relatoristaNome || '—')}</p>
-          <div class="rodape-linha-ass"></div>
-          <p class="rodape-cargo">Relatorista — assinatura</p>
-        </div>
-        <div class="rodape-row2">
-          <div class="rodape-textos">
-            <p class="rodape-linha-auth"><strong>Autenticidade:</strong> ${escapeHtml(m.hash)}</p>
-            <p class="rodape-linha-gen">Gerado em: ${escapeHtml(m.emitidoEm)} · v${m.versao}${
-              m.rodapeTextoRenderizado ? ` · ${escapeHtml(m.rodapeTextoRenderizado)}` : ''
-            }</p>
-          </div>
-          <div class="rodape-qr-wrap">
-            <img class="qr" src="${imgSrcForPdf(m.qrDataUrl)}" alt="" width="44" height="44" />
-          </div>
-        </div>
-      </footer>
-    </div>
   </main>
+  <footer class="rodape-fixo" role="contentinfo">
+    <div class="rodape-info">
+      <div><strong>Relatorista:</strong> ${escapeHtml(relatoristaParaRodape)}</div>
+      <div class="rodape-info-linha-auth"><strong>Autenticidade:</strong> ${escapeHtml(m.hash)}</div>
+      <div>Gerado em: ${escapeHtml(m.emitidoEm)} · v${m.versao}${
+        m.rodapeTextoRenderizado ? ` · ${escapeHtml(m.rodapeTextoRenderizado)}` : ''
+      }</div>
+    </div>
+    <img class="qr" src="${imgSrcForPdf(m.qrDataUrl)}" alt="QR Code de autenticação" width="54" height="54" />
+  </footer>
 </body>
 </html>`
 }
