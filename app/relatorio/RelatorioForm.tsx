@@ -25,114 +25,6 @@ interface Atividade {
   nome: string
 }
 
-function PreviewResumo({
-  onClose, operadorNome, data, horaInicio, horaFim, horas,
-  categoriaNome, atividadeNome, equipeNomes, descricao, descricaoRevisada,
-}: {
-  onClose: () => void
-  operadorNome: string
-  data: string
-  horaInicio: string
-  horaFim: string
-  horas: number
-  categoriaNome: string
-  atividadeNome: string
-  equipeNomes: string[]
-  descricao: string
-  descricaoRevisada: string | null
-}) {
-  const CAT_COLORS: Record<string, string> = { OPERAR: '#1a237e', TREINAR: '#f97316', INSTRUIR: '#16a34a' }
-  const catColor = CAT_COLORS[categoriaNome] ?? '#64748b'
-  const texto = descricaoRevisada || descricao
-  const dataFmt = data
-    ? new Date(data + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
-    : '—'
-
-  return (
-    <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.65)', zIndex: 1000, display: 'flex', alignItems: 'flex-end' }}
-      onClick={onClose}
-    >
-      <div
-        style={{ background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxHeight: '88vh', overflowY: 'auto', padding: '20px 16px 32px', boxShadow: '0 -8px 40px rgba(0,0,0,0.2)' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Drag handle */}
-        <div style={{ width: 40, height: 4, background: '#e2e8f0', borderRadius: 2, margin: '0 auto 18px' }} />
-
-        <div style={{ fontWeight: 800, fontSize: '1rem', color: '#1a237e', textAlign: 'center', marginBottom: 18 }}>
-          Resumo do Relatório
-        </div>
-
-        {/* Relatorista */}
-        <div style={{ background: 'rgba(26,35,126,0.06)', borderLeft: '3px solid #1a237e', padding: '8px 12px', borderRadius: 6, marginBottom: 14, fontSize: '0.88rem', fontWeight: 700, color: '#1a237e' }}>
-          {operadorNome}
-        </div>
-
-        {/* Data/hora */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', fontWeight: 700, color: '#64748b', letterSpacing: 0.5, marginBottom: 4 }}>Data e Horário</div>
-          <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '0.9rem', textTransform: 'capitalize' }}>{dataFmt}</div>
-          <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: 3 }}>
-            {horaInicio && horaFim ? `${horaInicio} às ${horaFim}` : 'Horário não informado'}
-            {horas > 0 ? ` · ${horas}h` : ''}
-          </div>
-        </div>
-
-        {/* Categoria + Atividade */}
-        {(categoriaNome || atividadeNome) && (
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', fontWeight: 700, color: '#64748b', letterSpacing: 0.5, marginBottom: 6 }}>Operação</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {categoriaNome && (
-                <span style={{ background: `${catColor}18`, color: catColor, border: `1px solid ${catColor}40`, borderRadius: 20, padding: '4px 12px', fontSize: '0.75rem', fontWeight: 700 }}>
-                  {categoriaNome}
-                </span>
-              )}
-              {atividadeNome && (
-                <span style={{ background: '#f8fafc', color: '#334155', border: '1px solid #e2e8f0', borderRadius: 20, padding: '4px 12px', fontSize: '0.75rem', fontWeight: 600 }}>
-                  {atividadeNome}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Equipe */}
-        {equipeNomes.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', fontWeight: 700, color: '#64748b', letterSpacing: 0.5, marginBottom: 6 }}>Equipe ({equipeNomes.length})</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {equipeNomes.map((n) => (
-                <span key={n} style={{ background: '#f1f5f9', color: '#334155', borderRadius: 20, padding: '4px 10px', fontSize: '0.75rem', fontWeight: 600 }}>{n}</span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Descrição */}
-        {texto && (
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', fontWeight: 700, color: '#64748b', letterSpacing: 0.5, marginBottom: 6 }}>
-              Descrição{descricaoRevisada ? ' · revisada pela IA' : ''}
-            </div>
-            <div style={{ fontSize: '0.85rem', color: '#334155', lineHeight: 1.7, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, maxHeight: 180, overflowY: 'auto' }}>
-              {texto}
-            </div>
-          </div>
-        )}
-
-        <button
-          onClick={onClose}
-          style={{ width: '100%', padding: 14, background: '#1a237e', color: '#fff', border: 'none', borderRadius: 12, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}
-        >
-          Fechar
-        </button>
-      </div>
-    </div>
-  )
-}
-
 interface RelatorioFormProps {
   operadorAtual: Operador
   gaepId: string
@@ -218,7 +110,7 @@ export function RelatorioForm({
   const [descricaoRevisada, setDescricaoRevisada] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [relatorioSalvoId, setRelatorioSalvoId] = useState<string | null>(null)
-  const [showPreview, setShowPreview] = useState(false)
+  const [fotoUploadKey, setFotoUploadKey] = useState(0)
 
   useEffect(() => {
     if (!data) {
@@ -230,6 +122,20 @@ export function RelatorioForm({
   const categoriaSelecionada = categorias.find((c) => c.id === categoriaId)
   const atividadeSelecionada = atividades.find((a) => a.id === atividadeId)
   const equipeNomes = operadores.filter((o) => equipe.includes(o.id)).map((o) => o.nome)
+
+  function resetarFormulario() {
+    setData(new Date().toISOString().split('T')[0])
+    setHoraInicio('08:00')
+    setHoraFim('15:00')
+    setCategoriaId('')
+    setAtividadeId('')
+    setOutrosIntegrantes('')
+    setEquipe(operadores.map((o) => o.id))
+    setFotosUrls([])
+    setDescricao('')
+    setDescricaoRevisada(null)
+    setFotoUploadKey((current) => current + 1)
+  }
 
   /**
    * Valida os campos obrigatórios para salvar/consolidar o relatório.
@@ -258,6 +164,10 @@ export function RelatorioForm({
     setSalvando(true)
     setFeedback(null)
     try {
+      const fotos = fotosUrls
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[RELATORIO][save] fotos antes do submit:', fotos)
+      }
       const result = await salvarRelatorio({
         gaepId,
         relatoristId: operadorAtual.id,
@@ -271,7 +181,7 @@ export function RelatorioForm({
         descricaoBruta: descricao,
         descricaoRevisada: descricao,
         ocorrencias: '',
-        fotosUrls,
+        fotosUrls: fotos,
         equipe,
       })
       if (result.error) {
@@ -279,6 +189,7 @@ export function RelatorioForm({
       } else {
         setFeedback({ tipo: 'ok', msg: '✅ Operação registrada com sucesso!' })
         if (result.id) setRelatorioSalvoId(result.id)
+        resetarFormulario()
       }
     } catch (err) {
       console.error('[RelatorioForm] Erro inesperado ao salvar direto:', err)
@@ -349,6 +260,10 @@ export function RelatorioForm({
     setSalvando(true)
     setFeedback(null)
     try {
+      const fotos = fotosUrls
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[RELATORIO][save] fotos antes do submit:', fotos)
+      }
       const result = await salvarRelatorio({
         gaepId,
         relatoristId: operadorAtual.id,
@@ -362,15 +277,15 @@ export function RelatorioForm({
         descricaoBruta: descricao,
         descricaoRevisada: descricaoFinal,
         ocorrencias,
-        fotosUrls,
+        fotosUrls: fotos,
         equipe,
       })
       if (result.error) {
         setFeedback({ tipo: 'err', msg: result.error })
       } else {
         setFeedback({ tipo: 'ok', msg: '✅ Turno consolidado com sucesso!' })
-        setDescricaoRevisada(null)
         if (result.id) setRelatorioSalvoId(result.id)
+        resetarFormulario()
       }
     } catch (err) {
       console.error('[RelatorioForm] Erro inesperado ao consolidar turno:', err)
@@ -452,6 +367,7 @@ export function RelatorioForm({
         <label style={labelStyle}>Nome dos Outros Integrantes</label>
         <input
           type="text"
+          maxLength={500}
           style={inputStyle}
           value={outrosIntegrantes}
           onChange={(e) => setOutrosIntegrantes(e.target.value)}
@@ -461,6 +377,7 @@ export function RelatorioForm({
 
       {/* Fotos */}
       <FotoUpload
+        key={fotoUploadKey}
         gaepCodigo={gaepCodigo}
         categoria={categoriaSelecionada?.nome ?? 'GERAL'}
         atividade={atividadeSelecionada?.nome ?? 'ATIVIDADE'}
@@ -470,22 +387,6 @@ export function RelatorioForm({
 
       {/* Descrição + Mic */}
       <DescricaoMic value={descricao} onChange={setDescricao} />
-
-      {/* Preview antes de salvar */}
-      {descricao.trim() && (
-        <button
-          type="button"
-          onClick={() => setShowPreview(true)}
-          style={{
-            width: '100%', padding: '11px', background: 'rgba(26,35,126,0.05)',
-            color: '#1a237e', border: '1px solid rgba(26,35,126,0.2)', borderRadius: 10,
-            fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', marginBottom: 10,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}
-        >
-          👁 Ver resumo antes de salvar
-        </button>
-      )}
 
       {/* Botões */}
       <BotoesAcao
@@ -515,29 +416,30 @@ export function RelatorioForm({
         </div>
       )}
 
-      {/* Botão pós-salvamento — apenas "Ver Relatório" */}
+      {/* Acesso ao relatório salvo */}
       {relatorioSalvoId && (
-        <div style={{ marginBottom: 16, animation: 'fadeIn .3s' }}>
-          <Link
-            href={`/relatorio/${relatorioSalvoId}?pdf=1`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'block',
-              textAlign: 'center',
-              padding: '14px 0',
-              background: '#1a237e',
-              color: '#fff',
-              borderRadius: 10,
-              fontWeight: 700,
-              fontSize: '0.95rem',
-              textDecoration: 'none',
-              letterSpacing: 0.5,
-            }}
-          >
-            VER RELATÓRIO
-          </Link>
-        </div>
+        <Link
+          href={`/relatorio/${relatorioSalvoId}`}
+          prefetch={false}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'block',
+            marginBottom: 16,
+            textAlign: 'center',
+            padding: '14px 0',
+            background: '#1a237e',
+            color: '#fff',
+            borderRadius: 10,
+            fontWeight: 700,
+            fontSize: '0.95rem',
+            textDecoration: 'none',
+            letterSpacing: 0.5,
+            animation: 'fadeIn .3s',
+          }}
+        >
+          VER RELATÓRIO
+        </Link>
       )}
 
       {/* Área de revisão IA */}
@@ -546,23 +448,6 @@ export function RelatorioForm({
           descricaoRevisada={descricaoRevisada}
           onSalvar={handleSalvarConsolidado}
           salvando={salvando}
-        />
-      )}
-
-      {/* Preview bottom sheet */}
-      {showPreview && (
-        <PreviewResumo
-          onClose={() => setShowPreview(false)}
-          operadorNome={operadorAtual.nome}
-          data={data}
-          horaInicio={horaInicio}
-          horaFim={horaFim}
-          horas={calcHorasTotais(horaInicio, horaFim)}
-          categoriaNome={categoriaSelecionada?.nome ?? ''}
-          atividadeNome={atividadeSelecionada?.nome ?? ''}
-          equipeNomes={equipeNomes}
-          descricao={descricao}
-          descricaoRevisada={descricaoRevisada}
         />
       )}
     </div>

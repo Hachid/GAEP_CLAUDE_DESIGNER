@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { SidebarNav } from '@/components/layout/SidebarNav'
 import { buscarHistoricoRelatorios } from '../actions'
 import { HistoricoClient } from './HistoricoClient'
+import { getCategorias, getAtividades } from '@/lib/cache/queries'
 
 interface OperadorComGaep {
   id: string
@@ -12,17 +13,6 @@ interface OperadorComGaep {
   matricula: string
   perfil: string
   gaeps: { id: string; nome: string } | null
-}
-
-interface CategoriaRow {
-  id: string
-  nome: string
-}
-
-interface AtividadeRow {
-  id: string
-  nome: string
-  categoria_id: string
 }
 
 export default async function HistoricoPage() {
@@ -61,16 +51,14 @@ export default async function HistoricoPage() {
 
   if (!operadorAtual?.gaeps) redirect('/relatorio')
 
-  const [historicoRes, catsRes, atvsRes, opsRes] = await Promise.all([
+  const [historicoRes, categorias, atividades, opsRes] = await Promise.all([
     buscarHistoricoRelatorios(operadorAtual.gaeps.id),
-    admin.from('categorias_atividade').select('id, nome').order('nome'),
-    admin.from('atividades').select('id, nome').is('deleted_at', null).order('nome'),
+    getCategorias(),
+    getAtividades(),
     admin.from('operadores').select('id, nome').eq('gaep_id', operadorAtual.gaep_id).is('deleted_at', null).order('nome'),
   ])
 
   const relatorios = historicoRes.data ?? []
-  const categorias = (catsRes.data ?? []) as CategoriaRow[]
-  const atividades = (atvsRes.data ?? []) as AtividadeRow[]
   const operadores = (opsRes.data ?? []) as { id: string; nome: string }[]
 
   return (

@@ -1,9 +1,10 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { uploadRelatorioFoto } from '@/app/relatorio/actions'
 
 interface FotoUploadProps {
+  /** Mantido para compatibilidade; o GAEP no Storage vem do operador autenticado no servidor. */
   gaepCodigo: string
   categoria: string
   atividade: string
@@ -16,46 +17,48 @@ interface FotoUploadProps {
  *
  * - Máximo de 3 fotos por relatório.
  * - Nome do arquivo: `gaep-fotos/{codigo}/fotos/{DD-MM-AAAA}_{CATEGORIA}_{ATIVIDADE}_{N}.{ext}`
- * - Exibe thumbnails 65×65px após o upload.
- * - Fallback: se o upload falhar, o preview ainda aparece mas a URL não é enviada.
+ * - Upload via Server Action (service role) para contornar RLS do Storage no cliente.
+ * - Exibe thumbnails 65×65px após o upload bem-sucedido.
  */
-export function FotoUpload({ gaepCodigo, categoria, atividade, data, onUpload }: FotoUploadProps) {
+export function FotoUpload(props: FotoUploadProps) {
+  const { categoria, atividade, data, onUpload } = props
   const inputRef = useRef<HTMLInputElement>(null)
   const [previews, setPreviews] = useState<string[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([])
+  const [erroUpload, setErroUpload] = useState<string | null>(null)
 
   async function handleFiles(files: FileList) {
     const remaining = 3 - uploadedUrls.length
     if (remaining <= 0) return
     const selected = Array.from(files).slice(0, remaining)
     setUploading(true)
+    setErroUpload(null)
 
-    const supabase = createClient()
     const newUrls: string[] = []
     const newPreviews: string[] = []
-
-    const [year, month, day] = data.split('-')
-    const dateStr = `${day}-${month}-${year}`
-    const catSlug = categoria.replace(/\s+/g, '_').toUpperCase()
-    const atSlug = atividade.replace(/\s+/g, '_').toUpperCase()
-    const bucket = 'gaep-fotos'
 
     for (let i = 0; i < selected.length; i++) {
       const file = selected[i]
       const n = uploadedUrls.length + i + 1
-      const ext = file.name.split('.').pop() ?? 'jpg'
-      const path = `${gaepCodigo.toLowerCase()}/fotos/${dateStr}_${catSlug}_${atSlug}_${n}.${ext}`
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('data', data)
+      fd.append('categoria', categoria)
+      fd.append('atividade', atividade)
+      fd.append('indice', String(n))
 
-      const { data: uploadData, error } = await supabase.storage
-        .from(bucket)
-        .upload(path, file, { upsert: true })
-
-      if (!error && uploadData) {
-        const { data: pub } = supabase.storage.from(bucket).getPublicUrl(uploadData.path)
-        newUrls.push(pub.publicUrl)
+      const res = await uploadRelatorioFoto(fd)
+      if (res.url) {
+        newUrls.push(res.url)
+        newPreviews.push(URL.createObjectURL(file))
+      } else {
+        const msg = res.error ?? 'Falha no envio da foto.'
+        setErroUpload(msg)
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[FotoUpload] upload falhou:', msg)
+        }
       }
-      newPreviews.push(URL.createObjectURL(file))
     }
 
     const merged = [...uploadedUrls, ...newUrls]
@@ -78,6 +81,24 @@ export function FotoUpload({ gaepCodigo, categoria, atividade, data, onUpload }:
   return (
     <div style={{ marginBottom: 18 }}>
       <label style={labelStyle}>FOTOS</label>
+
+      {erroUpload && (
+        <div
+          role="alert"
+          style={{
+            marginBottom: 10,
+            padding: '10px 12px',
+            borderRadius: 8,
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            color: '#b91c1c',
+            background: 'rgba(239,68,68,0.08)',
+            border: '1px solid rgba(239,68,68,0.25)',
+          }}
+        >
+          {erroUpload}
+        </div>
+      )}
 
       {uploadedUrls.length < 3 && (
         <div

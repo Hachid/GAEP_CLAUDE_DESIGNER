@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { RelatorioForm } from './RelatorioForm'
 import { SidebarNav } from '@/components/layout/SidebarNav'
+import { getCategorias, getAtividades } from '@/lib/cache/queries'
 
 /** Formato retornado pelo Supabase ao selecionar operador com join de gaeps. */
 interface OperadorComGaep {
@@ -186,7 +187,7 @@ export default async function RelatorioPage() {
   let atividades: AtividadeRow[] = []
 
   try {
-    const [opRes, catRes, atRes] = await Promise.all([
+    const [opRes, cats, atvs] = await Promise.all([
       admin
         .from('operadores')
         .select('id, nome_guerra:nome')
@@ -194,20 +195,16 @@ export default async function RelatorioPage() {
         .eq('ativo', true)
         .is('deleted_at', null)
         .order('nome'),
-      admin.from('categorias_atividade').select('id, nome').order('nome'),
-      admin
-        .from('atividades')
-        .select('id, nome')
-        .is('deleted_at', null)
-        .order('nome'),
+      getCategorias(),
+      getAtividades(),
     ])
 
     operadores = (opRes.data ?? []).map((o: { id: string; nome_guerra: string }) => ({
       id: o.id,
       nome: o.nome_guerra,
     }))
-    categorias = catRes.data ?? []
-    atividades = atRes.data ?? []
+    categorias = cats
+    atividades = atvs
   } catch (err) {
     console.error('[RelatorioPage] Erro ao buscar dados do formulário:', err)
   }

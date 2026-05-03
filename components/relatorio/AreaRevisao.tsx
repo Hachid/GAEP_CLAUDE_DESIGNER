@@ -45,6 +45,7 @@ export function AreaRevisao({ descricaoRevisada, onSalvar, salvando }: AreaRevis
         rows={5}
         value={descricaoFinal}
         onChange={(e) => setDescricaoFinal(e.target.value)}
+        maxLength={5000}
         style={{ ...inputStyle, marginBottom: 14 }}
       />
 
@@ -56,6 +57,7 @@ export function AreaRevisao({ descricaoRevisada, onSalvar, salvando }: AreaRevis
         value={ocorrencias}
         onChange={(e) => setOcorrencias(e.target.value)}
         placeholder="Ex: Informações relevantes extras..."
+        maxLength={1000}
         style={{ ...inputStyle, marginBottom: 20 }}
       />
 

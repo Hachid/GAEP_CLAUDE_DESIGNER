@@ -1,7 +1,8 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { normalizeFotosUrls } from '@/lib/pdf/normalizeFotosUrls'
+import { getSessionOrThrow } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { revalidatePath, revalidateTag } from 'next/cache'
 
@@ -45,6 +46,118 @@ function validarObrigatoriosSalvarRelatorio(input: SalvarRelatorioInput): string
   return null
 }
 
+const GAEP_FOTOS_BUCKET = 'gaep-fotos'
+const MAX_RELATORIO_FOTO_BYTES = 6 * 1024 * 1024
+
+function dataIsoParaSlugRelatorioFoto(dataProp: string): string {
+  const t = dataProp.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) {
+    const [y, m, d] = t.split('-')
+    return `${d}-${m}-${y}`
+  }
+  const hoje = new Date().toISOString().split('T')[0]
+  const [y, m, d] = hoje.split('-')
+  return `${d}-${m}-${y}`
+}
+
+function slugFotoSegment(s: string): string {
+  const t = s.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '').toUpperCase()
+  return t || 'GERAL'
+}
+
+function extensaoImagemSegura(fileName: string): string {
+  const raw = (fileName.split('.').pop() ?? 'jpg').toLowerCase()
+  const ok = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif']
+  if (ok.includes(raw)) return raw === 'jpeg' ? 'jpg' : raw
+  return 'jpg'
+}
+
+async function resolverOperadorGaepCodigoParaFoto(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  email: string | undefined
+): Promise<string | null> {
+  const { data: byAuthId } = await admin
+    .from('operadores')
+    .select('gaeps(id, nome:codigo)')
+    .eq('auth_id', userId)
+    .is('deleted_at', null)
+    .maybeSingle<{ gaeps: { nome: string } | null }>()
+
+  if (byAuthId?.gaeps?.nome) return byAuthId.gaeps.nome
+
+  const matricula = email?.replace('@gaep.internal', '').trim() ?? ''
+  if (!matricula) return null
+
+  const { data: byMatricula } = await admin
+    .from('operadores')
+    .select('gaeps(id, nome:codigo)')
+    .eq('matricula', matricula)
+    .is('deleted_at', null)
+    .maybeSingle<{ gaeps: { nome: string } | null }>()
+
+  return byMatricula?.gaeps?.nome ?? null
+}
+
+export type UploadRelatorioFotoResult = { url?: string; error?: string }
+
+/**
+ * Upload de foto do relatório via serviço (contorna RLS do Storage no browser).
+ * O caminho no bucket usa sempre o código do GAEP do operador autenticado no servidor.
+ */
+export async function uploadRelatorioFoto(formData: FormData): Promise<UploadRelatorioFotoResult> {
+  let user
+  try {
+    user = await getSessionOrThrow()
+  } catch {
+    return { error: 'Sessão expirada. Faça login novamente.' }
+  }
+
+  const file = formData.get('file')
+  if (!(file instanceof File)) {
+    return { error: 'Arquivo inválido.' }
+  }
+  if (!file.size || file.size > MAX_RELATORIO_FOTO_BYTES) {
+    return { error: 'A imagem deve ter no máximo 6 MB.' }
+  }
+  if (!file.type.startsWith('image/')) {
+    return { error: 'Envie apenas uma imagem.' }
+  }
+
+  const data = String(formData.get('data') ?? '').trim()
+  const categoria = String(formData.get('categoria') ?? '')
+  const atividade = String(formData.get('atividade') ?? '')
+  const indice = Number.parseInt(String(formData.get('indice') ?? '1'), 10)
+  if (!Number.isFinite(indice) || indice < 1 || indice > 3) {
+    return { error: 'Índice da foto inválido.' }
+  }
+
+  const admin = createAdminClient()
+  const codigoGaep = await resolverOperadorGaepCodigoParaFoto(admin, user.id, user.email ?? undefined)
+  if (!codigoGaep) {
+    return { error: 'Operador não encontrado.' }
+  }
+
+  const dateStr = dataIsoParaSlugRelatorioFoto(data)
+  const catSlug = slugFotoSegment(categoria)
+  const atSlug = slugFotoSegment(atividade)
+  const ext = extensaoImagemSegura(file.name)
+  const objectPath = `${codigoGaep.toLowerCase()}/fotos/${dateStr}_${catSlug}_${atSlug}_${indice}.${ext}`
+
+  const buf = Buffer.from(await file.arrayBuffer())
+  const { data: up, error: upErr } = await admin.storage
+    .from(GAEP_FOTOS_BUCKET)
+    .upload(objectPath, buf, { contentType: file.type || 'image/jpeg', upsert: true })
+
+  if (upErr || !up) {
+    console.error('[uploadRelatorioFoto] Storage:', upErr?.message)
+    return { error: upErr?.message ?? 'Falha ao enviar a foto.' }
+  }
+
+  const { data: pub } = admin.storage.from(GAEP_FOTOS_BUCKET).getPublicUrl(up.path)
+  return { url: pub.publicUrl }
+}
+
 /**
  * Server Action — salva um relatório operacional no Supabase.
  *
@@ -62,13 +175,9 @@ export async function salvarRelatorio(
   input: SalvarRelatorioInput
 ): Promise<SalvarRelatorioResult> {
   // ── 1. Validar autenticação ───────────────────────────────────
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
+  try {
+    await getSessionOrThrow()
+  } catch {
     return { error: 'Sessão expirada. Faça login novamente.' }
   }
 
@@ -80,6 +189,18 @@ export async function salvarRelatorio(
   if (!input.descricaoRevisada.trim()) {
     return { error: 'A descrição revisada não pode estar vazia.' }
   }
+  if (input.descricaoBruta.length > 5000) {
+    return { error: 'Descrição dos fatos excede 5.000 caracteres.' }
+  }
+  if (input.descricaoRevisada.length > 5000) {
+    return { error: 'Descrição revisada excede 5.000 caracteres.' }
+  }
+  if (input.ocorrencias.length > 1000) {
+    return { error: 'Observações excedem 1.000 caracteres.' }
+  }
+  if (input.outrosIntegrantes.length > 500) {
+    return { error: 'Outros integrantes excede 500 caracteres.' }
+  }
 
   const admin = createAdminClient()
   let ip = 'unknown'
@@ -89,6 +210,13 @@ export async function salvarRelatorio(
     ip = headerStore.get('x-forwarded-for') ?? headerStore.get('x-real-ip') ?? 'unknown'
   } catch {
     // headers() pode falhar em contextos de teste
+  }
+
+  const fotosParaGravar = normalizeFotosUrls(input.fotosUrls)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[RELATORIO][save] fotos antes do submit (raw length):', input.fotosUrls?.length)
+    console.log('[RELATORIO][save] fotos normalizadas count:', fotosParaGravar.length)
+    console.log('[RELATORIO][save] payload fotos_urls:', fotosParaGravar.length > 0 ? fotosParaGravar : null)
   }
 
   // ── 3. Inserir relatório ──────────────────────────────────────
@@ -107,14 +235,18 @@ export async function salvarRelatorio(
       descricao_bruta: input.descricaoBruta.trim() || null,
       descricao_revisada: input.descricaoRevisada.trim(),
       ocorrencias: input.ocorrencias.trim() || null,
-      fotos_urls: input.fotosUrls.length > 0 ? input.fotosUrls : null,
+      fotos_urls: fotosParaGravar.length > 0 ? fotosParaGravar : null,
     })
-    .select('id')
+    .select('id, fotos_urls')
     .single()
 
   if (insertError || !relatorio) {
     console.error('[salvarRelatorio] Erro ao inserir relatorio:', insertError)
     return { error: insertError?.message ?? 'Falha ao salvar o relatório. Tente novamente.' }
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[RELATORIO][save] insert result fotos_urls:', (relatorio as { fotos_urls?: unknown }).fotos_urls)
   }
 
   const relatorioId = relatorio.id as string
@@ -166,6 +298,7 @@ export async function salvarRelatorio(
 
 export interface RelatorioDetalhado {
   id: string
+  gaep_id: string
   data: string
   hora_inicio: string
   hora_fim: string
@@ -213,20 +346,18 @@ export interface RelatorioResumo {
 export async function buscarRelatorio(
   id: string
 ): Promise<{ data?: RelatorioDetalhado; error?: string }> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) return { error: 'Sessão expirada.' }
+  try {
+    await getSessionOrThrow()
+  } catch {
+    return { error: 'Sessão expirada.' }
+  }
 
   const admin = createAdminClient()
 
   const { data: rel, error: relErr } = await admin
     .from('relatorios')
     .select(
-      'id, data, hora_inicio, hora_fim, horas_totais, categoria_id, atividade_id, relatorista_id, descricao_bruta, descricao_revisada, ocorrencias, fotos_urls, outros_integrantes, versao, created_at, updated_at'
+      'id, gaep_id, data, hora_inicio, hora_fim, horas_totais, categoria_id, atividade_id, relatorista_id, descricao_bruta, descricao_revisada, ocorrencias, fotos_urls, outros_integrantes, versao, created_at, updated_at'
     )
     .eq('id', id)
     .is('deleted_at', null)
@@ -291,10 +422,12 @@ export async function buscarRelatorio(
   const catData = catRes.data as { nome: string } | null
   const atvData = atvRes.data as { nome: string } | null
   const relData = relRes.data as { nome: string } | null
+  const fotosNorm = normalizeFotosUrls(relRow.fotos_urls)
 
   return {
     data: {
       id: relRow.id as string,
+      gaep_id: relRow.gaep_id as string,
       data: relRow.data as string,
       hora_inicio: relRow.hora_inicio as string,
       hora_fim: relRow.hora_fim as string,
@@ -302,7 +435,7 @@ export async function buscarRelatorio(
       descricao_bruta: (relRow.descricao_bruta as string) ?? null,
       descricao_revisada: relRow.descricao_revisada as string,
       ocorrencias: (relRow.ocorrencias as string) ?? null,
-      fotos_urls: (relRow.fotos_urls as string[]) ?? null,
+      fotos_urls: fotosNorm.length > 0 ? fotosNorm : null,
       outros_integrantes: (relRow.outros_integrantes as string) ?? null,
       versao: relRow.versao as number,
       created_at: relRow.created_at as string,
@@ -320,13 +453,11 @@ export async function buscarRelatorio(
 export async function buscarHistoricoRelatorios(
   gaepId: string
 ): Promise<{ data?: RelatorioResumo[]; error?: string }> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) return { error: 'Sessão expirada.' }
+  try {
+    await getSessionOrThrow()
+  } catch {
+    return { error: 'Sessão expirada.' }
+  }
 
   const admin = createAdminClient()
 
@@ -400,13 +531,11 @@ export interface EditarRelatorioInput {
 export async function editarRelatorio(
   input: EditarRelatorioInput
 ): Promise<{ error?: string }> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) return { error: 'Sessão expirada.' }
+  try {
+    await getSessionOrThrow()
+  } catch {
+    return { error: 'Sessão expirada.' }
+  }
   if (!input.descricaoRevisada.trim()) return { error: 'A descrição não pode estar vazia.' }
 
   const admin = createAdminClient()
@@ -469,13 +598,11 @@ export async function excluirRelatorio(input: {
   id: string
   operadorId: string
 }): Promise<{ error?: string }> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) return { error: 'Sessão expirada.' }
+  try {
+    await getSessionOrThrow()
+  } catch {
+    return { error: 'Sessão expirada.' }
+  }
 
   const admin = createAdminClient()
 

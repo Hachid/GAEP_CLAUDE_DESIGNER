@@ -2,15 +2,8 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import { FotoUpload } from '../FotoUpload'
 
-vi.mock('@/lib/supabase/client', () => ({
-  createClient: () => ({
-    storage: {
-      from: () => ({
-        upload: vi.fn().mockResolvedValue({ data: { path: 'test.jpg' }, error: null }),
-        getPublicUrl: vi.fn().mockReturnValue({ data: { publicUrl: 'https://example.com/test.jpg' } }),
-      }),
-    },
-  }),
+vi.mock('@/app/relatorio/actions', () => ({
+  uploadRelatorioFoto: vi.fn().mockResolvedValue({ url: 'https://example.com/storage/v1/object/public/gaep-fotos/x/fotos/1.jpg' }),
 }))
 
 describe('FotoUpload', () => {

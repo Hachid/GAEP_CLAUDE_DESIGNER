@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { RelatorioDetalhado } from '../actions'
 import { editarRelatorio, excluirRelatorio } from '../actions'
 import type { ConfigRelatorioUIData } from '@/app/(app)/gestao/GestaoClient'
+import { DEFAULT_TITULO_RELATORIO_INSTITUCIONAL } from '@/lib/pdf/defaultTituloRelatorio'
+import { QrCode } from '@/components/relatorio/QrCode'
 
 interface Props {
   relatorio: RelatorioDetalhado
@@ -13,8 +15,8 @@ interface Props {
   operadorId: string
   gaepCodigo: string
   configRelatorio: ConfigRelatorioUIData
-  /** Abre o diálogo de impressão/PDF ao carregar (timbrado e estilos da gestão). */
-  autoPrintPdf?: boolean
+  /** Hash estável + payload do QR (autenticidade). */
+  integrity: { hash: string; qrPayload: string }
 }
 
 function formatarData(dataISO: string): string {
@@ -28,39 +30,31 @@ function formatarHora(hora: string | null): string {
   return hora.slice(0, 5)
 }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '11px 13px',
-  background: '#f3f4f6',
-  border: '1px solid #e2e8f0',
-  color: '#1e293b',
-  borderRadius: 10,
-  fontSize: 14,
-  outline: 'none',
-  boxSizing: 'border-box',
-  fontFamily: 'inherit',
-  resize: 'vertical',
+function formatarDataHora(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
 }
 
 function renderRodape(texto: string, gaepCodigo: string, versao: number) {
   return texto.replaceAll('{{GAEP}}', gaepCodigo).replaceAll('{{VERSAO}}', String(versao))
 }
 
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '11px 13px', background: '#f3f4f6',
+  border: '1px solid #e2e8f0', color: '#1e293b', borderRadius: 10,
+  fontSize: 14, outline: 'none', boxSizing: 'border-box',
+  fontFamily: 'inherit', resize: 'vertical',
+}
+
 export function RelatorioDetalheClient({
-  relatorio,
-  perfil,
-  operadorId,
-  gaepCodigo,
-  configRelatorio,
-  autoPrintPdf = false,
+  relatorio, perfil, operadorId, gaepCodigo, configRelatorio, integrity,
 }: Props) {
   const router = useRouter()
-
-  useEffect(() => {
-    if (!autoPrintPdf) return
-    const id = window.setTimeout(() => window.print(), 600)
-    return () => window.clearTimeout(id)
-  }, [autoPrintPdf])
   const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(perfil)
 
   const [editando, setEditando] = useState(false)
@@ -69,13 +63,24 @@ export function RelatorioDetalheClient({
   const [salvando, setSalvando] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  /** PDF sob demanda: geração Playwright é pesada; só carrega ao pedir (melhora tempo até a página útil). */
+  const [mostrarPdf, setMostrarPdf] = useState(false)
 
   const dataFmt = formatarData(relatorio.data)
   const categoriaNome = relatorio.categoria_nome ?? ''
   const atividadeNome = relatorio.atividade_nome ?? ''
-  const titulo = [categoriaNome, atividadeNome].filter(Boolean).join(' - ') || 'Relatório Operacional'
+  const tituloDoc = [categoriaNome, atividadeNome].filter(Boolean).join(' — ') || 'Relatório Operacional'
+  /** Mesmo texto do preview Gestão (subtítulo configurável ou padrão). */
+  const subtituloGestao =
+    configRelatorio.subtituloTexto.trim() || 'RELATÓRIO DE ATIVIDADE(S)'
   const periodoStr = `${formatarHora(relatorio.hora_inicio)} às ${formatarHora(relatorio.hora_fim)}${relatorio.horas_totais ? ` (${relatorio.horas_totais}h)` : ''}`
+  const duracaoStr =
+    relatorio.horas_totais != null && Number.isFinite(Number(relatorio.horas_totais)) && relatorio.horas_totais >= 0
+      ? `${relatorio.horas_totais}h`
+      : 'Não informado'
   const equipeStr = relatorio.participantes.map((p) => p.nome).join(', ')
+  const emitidoEm = formatarDataHora(relatorio.created_at)
+  // Estilos calculados uma vez — usados no documento de tela e na impressão
   const tituloPrintStyle: React.CSSProperties = {
     fontFamily: configRelatorio.tituloEstilo.fontFamily,
     color: configRelatorio.tituloEstilo.fontColor,
@@ -115,172 +120,227 @@ export function RelatorioDetalheClient({
     marginTop: configRelatorio.descricaoEstilo.marginTop ? `${configRelatorio.descricaoEstilo.marginTop}mm` : undefined,
     marginBottom: configRelatorio.descricaoEstilo.marginBottom !== undefined ? `${configRelatorio.descricaoEstilo.marginBottom}mm` : undefined,
   }
-  const rodapePrintStyle: React.CSSProperties = {
-    fontFamily: configRelatorio.rodapeEstilo.fontFamily,
-    color: configRelatorio.rodapeEstilo.fontColor,
-    textAlign: configRelatorio.rodapeEstilo.align,
-    marginLeft: `${configRelatorio.rodapeEstilo.indent}px`,
-    lineHeight: configRelatorio.rodapeEstilo.lineHeight,
-    fontSize: `${configRelatorio.rodapeEstilo.fontSize ?? 8}pt`,
-    fontWeight: configRelatorio.rodapeEstilo.bold ? 'bold' : 'normal',
-    fontStyle: configRelatorio.rodapeEstilo.italic ? 'italic' : 'normal',
-    textDecoration: configRelatorio.rodapeEstilo.underline ? 'underline' : 'none',
-    marginTop: configRelatorio.rodapeEstilo.marginTop ? `${configRelatorio.rodapeEstilo.marginTop}mm` : undefined,
-  }
-
-  const legendaStr = [
-    `Data: ${dataFmt}`,
-    `${formatarHora(relatorio.hora_inicio)} às ${formatarHora(relatorio.hora_fim)}`,
-    categoriaNome ? `Categoria: ${categoriaNome}` : '',
-    atividadeNome ? `Atividade: ${atividadeNome}` : '',
-  ].filter(Boolean).join(' | ')
-
   async function handleSalvarEdicao() {
     if (!descricaoEdit.trim()) { setErro('A descrição não pode estar vazia.'); return }
-    setSalvando(true)
-    setErro(null)
+    setSalvando(true); setErro(null)
     const result = await editarRelatorio({ id: relatorio.id, descricaoRevisada: descricaoEdit, motivo, operadorId })
     setSalvando(false)
-    if (result.error) {
-      setErro(result.error)
-    } else {
-      setEditando(false)
-      setMotivo('')
-      router.refresh()
-    }
+    if (result.error) { setErro(result.error) } else { setEditando(false); setMotivo(''); router.refresh() }
   }
 
   async function handleExcluir() {
-    setSalvando(true)
-    setErro(null)
+    setSalvando(true); setErro(null)
     const result = await excluirRelatorio({ id: relatorio.id, operadorId })
     setSalvando(false)
-    if (result.error) {
-      setErro(result.error)
-      setConfirmDelete(false)
-    } else {
-      router.push('/relatorio/historico')
-    }
+    if (result.error) { setErro(result.error); setConfirmDelete(false) }
+    else { router.push('/relatorio/historico') }
   }
 
   return (
     <div style={{ paddingBottom: 30 }}>
 
       {/* ══════════════════════════════════════════
-          VIEW DE TELA  (oculta na impressão)
+          BARRA SUPERIOR (oculta na impressão)
       ══════════════════════════════════════════ */}
-      <div className="no-print">
+      <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <Link href="/relatorio/historico" style={{ color: '#64748b', textDecoration: 'none', fontSize: '1.15rem', lineHeight: 1 }}>
+          ←
+        </Link>
+        <span style={{ flex: 1, fontSize: '0.82rem', color: '#64748b', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {dataFmt} · {tituloDoc}
+        </span>
+        <button
+          type="button"
+          onClick={() => setMostrarPdf((v) => !v)}
+          style={{
+            padding: '8px 14px',
+            background: '#1a237e',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 8,
+            fontWeight: 700,
+            fontSize: '0.78rem',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {mostrarPdf ? 'Ocultar PDF' : 'Ver PDF'}
+        </button>
+        <Link
+          href={`/api/pdf/${relatorio.id}?download=1`}
+          prefetch={false}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            padding: '8px 12px',
+            background: '#fff',
+            color: '#1a237e',
+            border: '1.5px solid #1a237e',
+            borderRadius: 8,
+            fontWeight: 700,
+            fontSize: '0.78rem',
+            textDecoration: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Baixar PDF
+        </Link>
+        <Link
+          href={`/api/pdf/${relatorio.id}`}
+          prefetch={false}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            padding: '8px 10px',
+            color: '#1a237e',
+            fontWeight: 700,
+            fontSize: '0.72rem',
+            whiteSpace: 'nowrap',
+            textDecoration: 'none',
+          }}
+        >
+          Nova aba
+        </Link>
+      </div>
 
-        {/* Barra de ações */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <Link href="/relatorio/historico" style={{ color: '#64748b', textDecoration: 'none', fontSize: '1.1rem' }}>
-            ←
-          </Link>
-          <span style={{ flex: 1, fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>
-            {dataFmt} · {titulo}
-          </span>
-          <button
-            onClick={() => window.print()}
-            style={{ padding: '8px 14px', background: '#1a237e', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer' }}
-          >
-            🖨 Imprimir / PDF
-          </button>
+      {mostrarPdf && (
+        <div className="no-print" style={{ marginBottom: 14 }}>
+          <iframe
+            title="Relatório em PDF"
+            src={`/api/pdf/${relatorio.id}`}
+            style={{
+              width: '100%',
+              height: 'min(78vh, 820px)',
+              minHeight: 360,
+              border: '1.5px solid #e2e8f0',
+              borderRadius: 12,
+              background: '#f1f5f9',
+              display: 'block',
+            }}
+          />
+          <p style={{ margin: '8px 0 0', fontSize: '0.72rem', color: '#64748b', lineHeight: 1.45 }}>
+            O PDF aparece acima com o timbrado de fundo. No celular, use o menu do visualizador para
+            {' '}<strong>compartilhar</strong> ou <strong>salvar</strong> o arquivo.
+          </p>
         </div>
+      )}
 
-        {/* Erro */}
-        {erro && (
-          <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '12px 14px', color: '#ef4444', fontWeight: 700, fontSize: '0.85rem', marginBottom: 12 }}>
-            {erro}
+      {/* ══════════════════════════════════════════
+          ERRO (oculto na impressão)
+      ══════════════════════════════════════════ */}
+      {erro && (
+        <div className="no-print" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '12px 14px', color: '#ef4444', fontWeight: 700, fontSize: '0.85rem', marginBottom: 12 }}>
+          {erro}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          MODO EDIÇÃO (oculto na impressão)
+      ══════════════════════════════════════════ */}
+      {editando && (
+        <div className="no-print" style={{ background: '#fff', borderRadius: 14, boxShadow: '0 4px 24px rgba(0,0,0,0.09)', padding: '20px 20px', marginBottom: 14 }}>
+          <div style={{ fontWeight: 800, color: '#1a237e', fontSize: '0.9rem', marginBottom: 14 }}>Editar Texto do Relatório</div>
+          <textarea rows={10} value={descricaoEdit} onChange={(e) => setDescricaoEdit(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: 0.5, marginBottom: 4 }}>Motivo da Edição</div>
+            <input type="text" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Descreva o motivo..." style={{ ...inputStyle, resize: undefined }} />
           </div>
-        )}
-
-        {/* Card do relatório */}
-        <div style={{ background: '#fff', borderRadius: 14, boxShadow: '0 4px 24px rgba(0,0,0,0.09)', overflow: 'hidden', marginBottom: 16 }}>
-          {/* Cabeçalho azul */}
-          <div style={{ background: '#1a237e', padding: '20px 24px', color: '#fff' }}>
-            <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.75, marginBottom: 4 }}>
-              {gaepCodigo} · Relatório Operacional
-            </div>
-            <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{titulo}</div>
-            <div style={{ fontSize: '0.85rem', opacity: 0.85, marginTop: 6 }}>
-              {dataFmt} · {periodoStr}
-            </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={handleSalvarEdicao} disabled={salvando} style={{ flex: 1, padding: '12px', background: '#1a237e', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: salvando ? 'not-allowed' : 'pointer' }}>
+              {salvando ? 'Salvando...' : 'Salvar Edição'}
+            </button>
+            <button onClick={() => { setEditando(false); setDescricaoEdit(relatorio.descricao_revisada); setErro(null) }} style={{ flex: 1, padding: '12px', background: 'transparent', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}>
+              Cancelar
+            </button>
           </div>
+        </div>
+      )}
 
-          {/* Corpo */}
-          <div style={{ padding: '20px 24px' }}>
-            {equipeStr && (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: 0.5, marginBottom: 6 }}>
-                  Equipe Operacional
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {relatorio.participantes.map((p) => (
-                    <span key={p.id} style={{ background: 'rgba(26,35,126,0.08)', color: '#1a237e', borderRadius: 20, padding: '4px 12px', fontSize: '0.82rem', fontWeight: 700 }}>
-                      {p.nome}
-                    </span>
-                  ))}
-                </div>
+      {/* ══════════════════════════════════════════
+          DOCUMENTO NA TELA (oculto na impressão)
+          Mostra o relatório formatado para leitura
+          e compartilhamento via celular.
+      ══════════════════════════════════════════ */}
+      {!editando && (
+        <div className="no-print" style={{ background: '#fff', borderRadius: 14, boxShadow: '0 4px 24px rgba(0,0,0,0.10)', overflow: 'hidden', marginBottom: 14 }}>
+
+          {/* Timbrado como imagem de cabeçalho */}
+          {configRelatorio.timbradoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={configRelatorio.timbradoUrl} alt="Papel Timbrado" style={{ width: '100%', display: 'block' }} />
+          )}
+
+          <div style={{ padding: '18px 20px 20px' }}>
+
+            {/* Título da organização */}
+            <div style={{ ...tituloPrintStyle, textTransform: 'uppercase', letterSpacing: '1px', whiteSpace: 'pre-line', marginBottom: 8 }}>
+              {configRelatorio.tituloTexto || DEFAULT_TITULO_RELATORIO_INSTITUCIONAL}
+            </div>
+
+            {/* Subtítulo — categoria e atividade (modelo novo) */}
+            <div style={{ ...subtituloPrintStyle, borderBottom: '1.5px solid #333', paddingBottom: 8, marginBottom: 12 }}>
+              {subtituloGestao}
+            </div>
+
+            {/* Bloco de metadados */}
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: '0.83rem', color: '#334155', lineHeight: 1.7 }}>
+              <div><strong>Data:</strong> {dataFmt}</div>
+              <div><strong>Período:</strong> {periodoStr}</div>
+              <div><strong>Duração:</strong> {duracaoStr}</div>
+              {categoriaNome && <div><strong>Categoria:</strong> {categoriaNome}</div>}
+              {atividadeNome && <div><strong>Atividade:</strong> {atividadeNome}</div>}
+            </div>
+
+            {/* Equipe */}
+            {(equipeStr || relatorio.outros_integrantes || relatorio.relatorista_nome) && (
+              <div style={{ marginBottom: 14, fontSize: '0.83rem', color: '#334155', lineHeight: 1.7 }}>
+                {equipeStr && <div><strong>Operadores:</strong> {equipeStr}</div>}
+                {relatorio.outros_integrantes && <div><strong>Outros Integrantes:</strong> {relatorio.outros_integrantes}</div>}
+                {relatorio.relatorista_nome && <div><strong>Relatorista:</strong> {relatorio.relatorista_nome}</div>}
               </div>
             )}
 
-            {relatorio.outros_integrantes && (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: 0.5, marginBottom: 4 }}>Outros Integrantes</div>
-                <div style={{ fontSize: '0.9rem', color: '#475569' }}>{relatorio.outros_integrantes}</div>
-              </div>
-            )}
-
-            <div style={{ borderTop: '1px solid #f1f5f9', margin: '6px 0 14px' }} />
+            <div style={{ borderTop: '1px solid #e2e8f0', marginBottom: 14 }} />
 
             {/* Texto do relatório */}
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: 0.5, marginBottom: 8 }}>
-                Texto do Relatório
+                Descrição da atividade
               </div>
-              {editando ? (
-                <div>
-                  <textarea rows={8} value={descricaoEdit} onChange={(e) => setDescricaoEdit(e.target.value)} style={{ ...inputStyle, marginBottom: 10 }} />
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: 0.5, marginBottom: 4 }}>Motivo da Edição</div>
-                    <input type="text" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Descreva o motivo..." style={{ ...inputStyle, resize: undefined }} />
-                  </div>
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button onClick={handleSalvarEdicao} disabled={salvando} style={{ flex: 1, padding: '12px', background: '#1a237e', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: salvando ? 'not-allowed' : 'pointer' }}>
-                      {salvando ? 'Salvando...' : 'Salvar Edição'}
-                    </button>
-                    <button onClick={() => { setEditando(false); setDescricaoEdit(relatorio.descricao_revisada); setErro(null) }} style={{ flex: 1, padding: '12px', background: 'transparent', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}>
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <p style={{ margin: 0, lineHeight: 1.8, color: '#1e293b', fontSize: '0.95rem', whiteSpace: 'pre-wrap', fontFamily: 'Georgia, serif', textAlign: 'justify' }}>
-                  {relatorio.descricao_revisada}
-                </p>
-              )}
+              <p style={{ margin: 0, ...descricaoPrintStyle, whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
+                {configRelatorio.descricaoTexto ? `${configRelatorio.descricaoTexto}\n\n` : ''}
+                {relatorio.descricao_revisada}
+              </p>
             </div>
 
+            {/* Ocorrências */}
             {relatorio.ocorrencias && (
               <>
-                <div style={{ borderTop: '1px solid #f1f5f9', margin: '6px 0 14px' }} />
+                <div style={{ borderTop: '1px solid #e2e8f0', marginBottom: 14 }} />
                 <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: 0.5, marginBottom: 6 }}>Ocorrências / Observações</div>
-                  <p style={{ margin: 0, lineHeight: 1.7, color: '#475569', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{relatorio.ocorrencias}</p>
+                  <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: 0.5, marginBottom: 6 }}>
+                    Ocorrências / Observações
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.88rem', lineHeight: 1.7, whiteSpace: 'pre-wrap', color: '#475569' }}>
+                    {relatorio.ocorrencias}
+                  </p>
                 </div>
               </>
             )}
 
+            {/* Fotos */}
             {relatorio.fotos_urls && relatorio.fotos_urls.length > 0 && (
               <>
-                <div style={{ borderTop: '1px solid #f1f5f9', margin: '6px 0 14px' }} />
-                <div>
-                  <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: 0.5, marginBottom: 8 }}>Registro Fotográfico</div>
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    {relatorio.fotos_urls.map((url, i) => (
+                <div style={{ borderTop: '1px solid #e2e8f0', marginBottom: 14 }} />
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: 0.5, marginBottom: 8 }}>
+                    Registro Fotográfico
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {relatorio.fotos_urls.slice(0, 3).map((url, i) => (
                       <a key={i} href={url} target="_blank" rel="noopener noreferrer">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt={`Foto ${i + 1}`} style={{ width: 110, height: 110, objectFit: 'cover', borderRadius: 8, border: '1px solid #e2e8f0' }} />
+                        <img src={url} alt={`Foto ${i + 1}`} style={{ width: 150, height: 170, objectFit: 'cover', borderRadius: 8, border: '1px solid #e2e8f0' }} />
                       </a>
                     ))}
                   </div>
@@ -288,73 +348,89 @@ export function RelatorioDetalheClient({
               </>
             )}
 
-            <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 18, paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>v{relatorio.versao} · {new Date(relatorio.created_at).toLocaleDateString('pt-BR')}</span>
-              <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{relatorio.relatorista_nome ?? ''}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Ações Admin */}
-        {isAdmin && !editando && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <button onClick={() => setEditando(true)} style={{ padding: '13px', background: 'transparent', color: '#1a237e', border: '1.5px solid #1a237e', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}>
-              Editar Texto
-            </button>
-            {!confirmDelete ? (
-              <button onClick={() => setConfirmDelete(true)} style={{ padding: '13px', background: 'transparent', color: '#ef4444', border: '1.5px solid #ef4444', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}>
-                Excluir Relatório
-              </button>
-            ) : (
-              <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '14px' }}>
-                <p style={{ margin: '0 0 12px', fontWeight: 700, color: '#ef4444', fontSize: '0.9rem', textAlign: 'center' }}>
-                  Confirmar exclusão? O registro permanece no banco.
-                </p>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button onClick={handleExcluir} disabled={salvando} style={{ flex: 1, padding: '11px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: salvando ? 'not-allowed' : 'pointer' }}>
-                    {salvando ? 'Excluindo...' : 'Confirmar'}
-                  </button>
-                  <button onClick={() => setConfirmDelete(false)} style={{ flex: 1, padding: '11px', background: 'transparent', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>
-                    Cancelar
-                  </button>
+            {/* Rodapé de validação — texto à esquerda, QR à direita */}
+            <div style={{ borderTop: '1px solid #cbd5e1', marginTop: 18, paddingTop: 12, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: '0.78rem', color: '#1a237e', marginBottom: 3 }}>
+                  Relatório confeccionado pelo sistema GAEP
+                </div>
+                <div style={{ fontSize: '0.73rem', color: '#475569', lineHeight: 1.6 }}>
+                  {relatorio.relatorista_nome && <span>Relatorista: <strong>{relatorio.relatorista_nome}</strong> · </span>}
+                  Gerado em: <strong>{emitidoEm}</strong> · v{relatorio.versao}
+                  {renderRodape(configRelatorio.rodapeTexto, gaepCodigo, relatorio.versao) && (
+                    <span> · {renderRodape(configRelatorio.rodapeTexto, gaepCodigo, relatorio.versao)}</span>
+                  )}
+                  <span> · Autenticidade: <strong>{integrity.hash}</strong></span>
                 </div>
               </div>
-            )}
-          </div>
-        )}
+              <div style={{ flexShrink: 0 }}>
+                <QrCode value={integrity.qrPayload} size={44} />
+              </div>
+            </div>
 
-        {/* Histórico de versões */}
-        {isAdmin && relatorio.versoes.length > 0 && (
-          <div style={{ background: '#f8fafc', borderRadius: 14, padding: '16px 18px', marginTop: 16, border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: 0.5, marginBottom: 10 }}>
-              Histórico de Versões
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {relatorio.versoes.map((v) => (
-                <div key={v.id} style={{ borderLeft: '3px solid #e2e8f0', paddingLeft: 12 }}>
-                  <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 4 }}>
-                    v{v.versao} · {v.editado_por_nome ?? 'desconhecido'} · {new Date(v.created_at).toLocaleString('pt-BR')}
-                    {v.motivo ? ` · "${v.motivo}"` : ''}
-                  </div>
-                  {v.descricao_anterior && (
-                    <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b', whiteSpace: 'pre-wrap' }}>{v.descricao_anterior}</p>
-                  )}
-                </div>
-              ))}
-            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════
-          VIEW DE IMPRESSÃO  (oculta na tela, exibida no print)
-          O CSS .print-page define: timbrado como background-image,
-          tamanho A4, e .print-page-content posiciona o conteúdo
-          dentro da área branca do timbrado.
+          AÇÕES ADMIN (ocultas na impressão)
       ══════════════════════════════════════════ */}
-      <div
-        className="print-page"
-      >
+      {isAdmin && !editando && (
+        <div className="no-print" style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+          <button onClick={() => setEditando(true)} style={{ padding: '13px', background: 'transparent', color: '#1a237e', border: '1.5px solid #1a237e', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}>
+            Editar Texto
+          </button>
+          {!confirmDelete ? (
+            <button onClick={() => setConfirmDelete(true)} style={{ padding: '13px', background: 'transparent', color: '#ef4444', border: '1.5px solid #ef4444', borderRadius: 10, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}>
+              Excluir Relatório
+            </button>
+          ) : (
+            <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '14px' }}>
+              <p style={{ margin: '0 0 12px', fontWeight: 700, color: '#ef4444', fontSize: '0.9rem', textAlign: 'center' }}>
+                Confirmar exclusão? O registro permanece no banco.
+              </p>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={handleExcluir} disabled={salvando} style={{ flex: 1, padding: '11px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: salvando ? 'not-allowed' : 'pointer' }}>
+                  {salvando ? 'Excluindo...' : 'Confirmar'}
+                </button>
+                <button onClick={() => setConfirmDelete(false)} style={{ flex: 1, padding: '11px', background: 'transparent', color: '#64748b', border: '1.5px solid #e2e8f0', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Histórico de versões */}
+      {isAdmin && relatorio.versoes.length > 0 && (
+        <div className="no-print" style={{ background: '#f8fafc', borderRadius: 14, padding: '16px 18px', marginBottom: 14, border: '1px solid #e2e8f0' }}>
+          <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: 0.5, marginBottom: 10 }}>
+            Histórico de Versões
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {relatorio.versoes.map((v) => (
+              <div key={v.id} style={{ borderLeft: '3px solid #e2e8f0', paddingLeft: 12 }}>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: 4 }}>
+                  v{v.versao} · {v.editado_por_nome ?? 'desconhecido'} · {new Date(v.created_at).toLocaleString('pt-BR')}
+                  {v.motivo ? ` · "${v.motivo}"` : ''}
+                </div>
+                {v.descricao_anterior && (
+                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b', whiteSpace: 'pre-wrap' }}>{v.descricao_anterior}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════
+          PÁGINA DE IMPRESSÃO A4
+          Oculta na tela — exibida apenas ao imprimir.
+          O timbrado ocupa 100% do fundo via .print-page-bg.
+          O conteúdo é posicionado absolutamente pelo printMargins.
+      ══════════════════════════════════════════ */}
+      <div className="print-page">
         <div
           className="print-page-bg"
           style={configRelatorio.timbradoUrl ? { backgroundImage: `url(${configRelatorio.timbradoUrl})` } : undefined}
@@ -368,59 +444,98 @@ export function RelatorioDetalheClient({
             left: `${configRelatorio.printMargins.left}mm`,
           }}
         >
-          {/* Título — nome da organização (multi-linha) */}
-          <div style={{ ...tituloPrintStyle, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '2mm', whiteSpace: 'pre-line' }}>
-            {configRelatorio.tituloTexto || 'RELATÓRIO OPERACIONAL'}
+          {/* Título */}
+          <div style={{
+            ...tituloPrintStyle,
+            textTransform: 'uppercase',
+            letterSpacing: '2px',
+            marginBottom: '2mm',
+            whiteSpace: 'pre-line',
+          }}>
+            {configRelatorio.tituloTexto || DEFAULT_TITULO_RELATORIO_INSTITUCIONAL}
           </div>
 
-          {/* Subtítulo — tipo do documento */}
-          <div style={{ ...subtituloPrintStyle, marginBottom: '3mm', paddingBottom: '3mm', borderBottom: '1.5px solid #333' }}>
-            {configRelatorio.subtituloTexto || 'RELATÓRIO DE ATIVIDADE(S)'}
+          {/* Subtítulo — categoria e atividade */}
+          <div style={{
+            ...subtituloPrintStyle,
+            fontWeight: 700,
+            borderBottom: '1.5pt solid #1e293b',
+            paddingBottom: '2.5mm',
+            marginBottom: '4mm',
+          }}>
+            {subtituloGestao}
           </div>
 
-          {/* Legenda — metadados em linha */}
-          <div style={{ fontSize: '9pt', color: '#333', marginBottom: '4mm', lineHeight: 1.5 }}>
-            {legendaStr}
+          {/* Legenda — 5 colunas (igual ao PDF) */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+              width: '100%',
+              marginBottom: '4mm',
+              border: '0.6pt solid #94a3b8',
+              borderRadius: 2,
+              overflow: 'hidden',
+              background: '#fff',
+            }}
+          >
+            {[
+              { head: 'Data', val: dataFmt || '—' },
+              { head: 'Período', val: periodoStr },
+              { head: 'Duração', val: duracaoStr },
+              { head: 'Categoria', val: categoriaNome || 'Não informado' },
+              { head: 'Atividade', val: atividadeNome || 'Não informado' },
+            ].map((cell, i, arr) => (
+              <div
+                key={cell.head}
+                style={{
+                  minWidth: 0,
+                  borderRight: i < arr.length - 1 ? '0.5pt solid #cbd5e1' : undefined,
+                }}
+              >
+                <div
+                  style={{
+                    background: '#dbeafe',
+                    color: '#475569',
+                    fontSize: '6.25pt',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.055em',
+                    padding: '1.2mm 1.6mm',
+                    borderBottom: '0.5pt solid #94a3b8',
+                  }}
+                >
+                  {cell.head}
+                </div>
+                <div style={{ fontSize: '8.25pt', fontWeight: 700, color: '#0f172a', padding: '1.6mm 1.8mm 1.8mm 1.8mm', lineHeight: 1.32, wordWrap: 'break-word' }}>{cell.val}</div>
+              </div>
+            ))}
           </div>
 
-          {/* Participantes */}
-          {(equipeStr || relatorio.outros_integrantes || relatorio.relatorista_nome) && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '4mm', fontSize: '9pt' }}>
-              <tbody>
-                {equipeStr && (
-                  <tr>
-                    <td style={{ paddingBottom: '1.5mm' }}>
-                      <strong>Equipe:</strong> {equipeStr}
-                    </td>
-                  </tr>
-                )}
-                {relatorio.outros_integrantes && (
-                  <tr>
-                    <td style={{ paddingBottom: '1.5mm' }}>
-                      <strong>Outros Integrantes:</strong> {relatorio.outros_integrantes}
-                    </td>
-                  </tr>
-                )}
-                {relatorio.relatorista_nome && (
-                  <tr>
-                    <td>
-                      <strong>Relatorista:</strong> {relatorio.relatorista_nome}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
-
-          {/* Linha divisória */}
-          <hr style={{ border: 'none', borderTop: '1px solid #555', margin: '4mm 0' }} />
-
-          {/* Texto do relatório */}
-          <div style={{ marginBottom: '5mm' }}>
-            <div style={{ fontSize: '9pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#555', marginBottom: '3mm' }}>
-              Texto do Relatório
+          {/* Bloco descrição: borda + equipe + rótulo + texto (igual ao PDF) */}
+          <div style={{ border: '0.75pt solid #0f172a', padding: '2.2mm 2.6mm 2.6mm 2.6mm', marginBottom: '4mm', background: '#fff' }}>
+            {equipeStr ? (
+              <div style={{ fontSize: '9.5pt', color: '#0f172a', lineHeight: 1.4, marginBottom: '1.8mm', fontWeight: 500 }}>{equipeStr}</div>
+            ) : null}
+            {relatorio.outros_integrantes ? (
+              <div style={{ fontSize: '8.5pt', color: '#334155', lineHeight: 1.35, marginBottom: '2.2mm' }}>
+                <span style={{ fontWeight: 700, color: '#475569' }}>Outros integrantes / forças amigas:</span>{' '}
+                {relatorio.outros_integrantes}
+              </div>
+            ) : null}
+            <div style={{ fontSize: '7.5pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', marginBottom: '1.4mm' }}>
+              Descrição da atividade
             </div>
-            <p style={{ margin: 0, whiteSpace: 'pre-wrap', ...descricaoPrintStyle }}>
+            <p
+              style={{
+                margin: 0,
+                whiteSpace: 'pre-wrap',
+                wordWrap: 'break-word',
+                overflowWrap: 'break-word',
+                boxSizing: 'border-box',
+                ...descricaoPrintStyle,
+              }}
+            >
               {configRelatorio.descricaoTexto ? `${configRelatorio.descricaoTexto}\n\n` : ''}
               {relatorio.descricao_revisada}
             </p>
@@ -428,34 +543,72 @@ export function RelatorioDetalheClient({
 
           {/* Ocorrências */}
           {relatorio.ocorrencias && (
-            <>
-              <hr style={{ border: 'none', borderTop: '1px solid #999', margin: '4mm 0' }} />
-              <div style={{ marginBottom: '5mm' }}>
-                <div style={{ fontSize: '9pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#555', marginBottom: '3mm' }}>
-                  Ocorrências / Observações
-                </div>
-                <p style={{ margin: 0, fontSize: '10pt', lineHeight: 1.7, whiteSpace: 'pre-wrap', color: '#000' }}>
-                  {relatorio.ocorrencias}
-                </p>
+            <div style={{ margin: '0 0 4mm 0', padding: '0 0 0 2mm', borderLeft: '2.5pt solid #64748b' }}>
+              <div style={{ fontSize: '8pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', marginBottom: '1.5mm' }}>
+                Ocorrências / observações
               </div>
-            </>
+              <p style={{ margin: 0, fontSize: '10pt', lineHeight: 1.7, whiteSpace: 'pre-wrap', color: '#000' }}>
+                {relatorio.ocorrencias}
+              </p>
+            </div>
           )}
 
-          {/* Assinatura */}
-          <div style={{ marginTop: '14mm', display: 'flex', justifyContent: 'center' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ width: '60mm', borderTop: '1px solid #000', paddingTop: '3mm', fontSize: '10pt' }}>
-                {relatorio.relatorista_nome ?? 'Relatorista'}
+          {relatorio.fotos_urls && relatorio.fotos_urls.length > 0 && (
+            <div style={{ margin: '1mm 0 5mm 0' }}>
+              <div style={{ fontSize: '8pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#4338ca', marginBottom: '1.2mm' }}>
+                Registros fotográficos
+              </div>
+              <div style={{ border: '0.6pt solid #a5b4fc', padding: '2mm', background: '#fafaff', borderRadius: 2 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2mm' }}>
+                  {relatorio.fotos_urls.slice(0, 3).map((url, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element -- impressão A4, URLs dinâmicas
+                    <img
+                      key={i}
+                      src={url}
+                      alt={`Foto ${i + 1}`}
+                      style={{ width: '150pt', height: '170pt', objectFit: 'cover', border: '0.5pt solid #94a3b8' }}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Rodapé do documento */}
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, fontSize: '8pt', ...rodapePrintStyle }}>
-            <span>
-              {renderRodape(configRelatorio.rodapeTexto, gaepCodigo, relatorio.versao)} · Emitido em{' '}
-              {new Date().toLocaleDateString('pt-BR')}
-            </span>
+          {/* Rodapé de validação — texto à esquerda, QR à direita (como o PDF) */}
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              borderTop: '0.5pt solid #cbd5e1',
+              paddingTop: '2mm',
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'flex-end',
+              justifyContent: 'space-between',
+              gap: '3mm',
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+              <div style={{ fontWeight: 700, fontSize: '7pt', color: '#475569', letterSpacing: '0.3pt' }}>
+                Relatório confeccionado pelo sistema GAEP
+              </div>
+              <div style={{ fontSize: '6.5pt', color: '#64748b', marginTop: '0.5mm', lineHeight: 1.4 }}>
+                Organização: {gaepCodigo} &nbsp;·&nbsp;
+                Relatorista: {relatorio.relatorista_nome ?? '—'} &nbsp;·&nbsp;
+                Gerado em: {emitidoEm} &nbsp;·&nbsp;
+                v{relatorio.versao}
+                {renderRodape(configRelatorio.rodapeTexto, gaepCodigo, relatorio.versao) && (
+                  <> &nbsp;·&nbsp; {renderRodape(configRelatorio.rodapeTexto, gaepCodigo, relatorio.versao)}</>
+                )}
+                <br />
+                Autenticidade (SHA-256): {integrity.hash}
+              </div>
+            </div>
+            <div style={{ flexShrink: 0, paddingBottom: '0.5mm' }}>
+              <QrCode value={integrity.qrPayload} size={45} />
+            </div>
           </div>
 
         </div>

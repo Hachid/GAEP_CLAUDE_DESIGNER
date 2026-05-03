@@ -76,6 +76,7 @@ export function DescricaoMic({ value, onChange }: DescricaoMicProps) {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Descreva a atividade ou toque no microfone..."
+          maxLength={5000}
           style={{
             width: '100%',
             padding: '12px 14px',
