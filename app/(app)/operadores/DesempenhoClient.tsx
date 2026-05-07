@@ -113,6 +113,12 @@ export function DesempenhoClient({ operadores, operadorInicialId }: Props) {
     setErro(null)
   }
 
+  const filtrosCorrentes = getFiltros()
+  const hrefPdfFolha =
+    operadorId !== ''
+      ? `/api/pdf/desempenho-operador?operadorId=${encodeURIComponent(operadorId)}&dataInicio=${encodeURIComponent(filtrosCorrentes.dataInicio)}&dataFim=${encodeURIComponent(filtrosCorrentes.dataFim)}&download=1`
+      : '#'
+
   return (
     <div style={{ paddingBottom: 30 }}>
       {/* Painel de filtros */}
@@ -202,6 +208,24 @@ export function DesempenhoClient({ operadores, operadorInicialId }: Props) {
       {/* View: Folha Ponto */}
       {!isPending && view === 'folha' && kpi && folha && (
         <div style={{ animation: 'fadeIn .3s' }}>
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center' }}>
+            <a
+              href={hrefPdfFolha}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                ...btnStyle,
+                flex: '0 0 auto',
+                padding: '12px 20px',
+                background: '#0f172a',
+                textDecoration: 'none',
+                display: 'inline-block',
+                textAlign: 'center',
+              }}
+            >
+              📄 Gerar PDF
+            </a>
+          </div>
           <FolhaPonto
             dias={folha}
             totalMinutos={kpi.totalMinutos}
