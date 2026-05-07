@@ -96,10 +96,31 @@ export async function POST(req: NextRequest) {
     ? data.split('-').reverse().join('/')
     : 'data não informada'
 
-  const operadoresStr =
-    equipe.length > 0 ? equipe.join(', ') : 'os operadores'
-  const catAtv = [categoria, atividade].filter(Boolean).join(' - ') || 'atividade não informada'
-  const abertura = `No dia ${dataFormatada} no período de ${horario}, os operadores ${operadoresStr}, realizaram a ${catAtv}, e `
+  const plural = equipe.length !== 1
+  const sujeito = plural
+    ? `os operadores ${equipe.length > 0 ? equipe.join(', ') : ''}`
+    : `o operador ${equipe[0] ?? ''}`
+  const verbo = plural ? 'realizaram' : 'realizou'
+
+  // Converte o nome da categoria (infinitivo) para substantivo concordado
+  function nominarCategoria(cat: string): { artigo: string; nome: string } {
+    switch (cat.toUpperCase().trim()) {
+      case 'OPERAR':   return { artigo: 'a', nome: 'operação' }
+      case 'TREINAR':  return { artigo: 'o', nome: 'treinamento' }
+      case 'INSTRUIR': return { artigo: 'a', nome: 'instrução' }
+      default:         return { artigo: 'a', nome: cat.toLowerCase() }
+    }
+  }
+
+  let catStr: string
+  if (categoria) {
+    const { artigo, nome } = nominarCategoria(categoria)
+    catStr = atividade ? `${artigo} ${nome} de ${atividade}` : `${artigo} ${nome}`
+  } else {
+    catStr = atividade ? `a atividade de ${atividade}` : 'a atividade'
+  }
+
+  const abertura = `No dia ${dataFormatada} no período de ${horario}, ${sujeito}, ${verbo} ${catStr}, e `
 
   const userPrompt = [
     `Escreva o relatório operacional OBRIGATORIAMENTE iniciando com a seguinte frase (não altere nem omita nenhuma palavra desta abertura):`,
