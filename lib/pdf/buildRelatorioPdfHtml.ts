@@ -335,8 +335,8 @@ export function buildRelatorioPdfHtml(m: RelatorioPdfHtmlModel): string {
     .bloco-ocorrencias {
       margin: 0 0 12pt 0;
       padding: 8pt 10pt;
-      border-left: 2.5pt solid #eab308 !important;
-      background: rgba(254, 240, 138, 0.4) !important;
+      border-left: 2.5pt solid #ca8a04 !important;
+      background: #fef9c3 !important;
       border-radius: 5pt;
     }
     .bloco-texto { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; margin-bottom: 10pt; }
@@ -508,8 +508,8 @@ export function buildRelatorioPdfHtml(m: RelatorioPdfHtmlModel): string {
         ${
           m.ocorrencias
             ? `<div class="bloco-ocorrencias">
-            <h2 style="${secTitleCss()}">⚠️ Ocorrências / observações</h2>
-            <div class="bloco-texto" style="${stDesc}">${escapeHtml(m.ocorrencias)}</div>
+            <h2 style="${secTitleCss()};color:#92400e;">❗ Ocorrências / observações</h2>
+            <div class="bloco-texto" style="${stDesc};color:#78350f;">${escapeHtml(m.ocorrencias)}</div>
           </div>`
             : ''
         }

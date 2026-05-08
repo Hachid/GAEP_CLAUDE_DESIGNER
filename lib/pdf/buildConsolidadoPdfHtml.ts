@@ -250,8 +250,8 @@ export function buildConsolidadoPdfHtml(m: ConsolidadoPdfModel): string {
             const atv = r.atividadeNome ?? '—'
             const relNome = r.relatoristaNome?.trim() || 'Não informado'
             const ocorrBlock = r.ocorrencias?.trim()
-              ? `<div style="margin-top:5pt;padding:5pt 8pt;background:rgba(254,240,138,0.4);border-left:2pt solid #eab308;border-radius:4pt;font-size:8.5pt;line-height:1.35;color:#78350f;">
-                  <strong>⚠️ Ocorrências:</strong> ${escapeHtml(r.ocorrencias!.trim())}
+              ? `<div style="margin-top:5pt;padding:5pt 8pt;background:#fef9c3;border-left:2pt solid #ca8a04;border-radius:4pt;font-size:8.5pt;line-height:1.35;color:#78350f;">
+                  <strong style="color:#92400e;">❗ Ocorrências:</strong> ${escapeHtml(r.ocorrencias!.trim())}
                 </div>`
               : ''
             return `<div class="descricao-item">
