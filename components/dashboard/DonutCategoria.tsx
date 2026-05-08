@@ -55,7 +55,7 @@ function makeLabelRenderer(prefix: string) {
           <path id={pathId} d={pathD} fill="none" />
         </defs>
         <text
-          fill="#1e293b"
+          fill="#ffffff"
           style={{
             fontSize: '15px',
             fontWeight: 800,
@@ -107,8 +107,8 @@ export function DonutCategoria({ data }: Props) {
           dataKey="value"
           cx="50%"
           cy="46%"
-          innerRadius={52}
-          outerRadius={86}
+          innerRadius={40}
+          outerRadius={92}
           paddingAngle={1}
           labelLine={false}
           label={renderLabel}
