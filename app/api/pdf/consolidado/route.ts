@@ -241,7 +241,8 @@ export async function GET(req: Request) {
     )
   }
 
-  const filenamePdf = `consolidado-${dataInicio}-${dataFim}.pdf`
+  const fmtFilename = (iso: string) => iso.split('-').reverse().join('-')
+  const filenamePdf = `Consolidado ${fmtFilename(dataInicio)} - ${fmtFilename(dataFim)}.pdf`
   return new NextResponse(Buffer.from(buffer), {
     status: 200,
     headers: {

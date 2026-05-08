@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 type Admin = ReturnType<typeof createAdminClient>
 
-const OFFICIAL_REL_PATH = ['public', 'gaep-cat-header-v1.png'] as const
+const OFFICIAL_REL_PATH = ['public', 'gaep-cat-header-v3.png'] as const
 
 /**
  * Timbrado do PDF: prioriza o arquivo oficial no repositório (`public/gaep-cat-header-v1.png`);

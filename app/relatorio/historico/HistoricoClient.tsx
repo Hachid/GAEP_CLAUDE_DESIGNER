@@ -63,8 +63,6 @@ export function HistoricoClient({ relatorios, categorias, atividades, operadores
   const [excluindoId, setExcluindoId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
-  /** PDF embutido no card só após clicar em Ver PDF (sem prefetch). */
-  const [pdfAbertoParaId, setPdfAbertoParaId] = useState<string | null>(null)
 
   function aplicarPeriodo(pid: PeriodoId) {
     setPeriodo(pid)
@@ -304,22 +302,23 @@ export function HistoricoClient({ relatorios, categorias, atividades, operadores
                       >
                         Editar relatório
                       </Link>
-                      <button
-                        type="button"
-                        onClick={() => setPdfAbertoParaId((cur) => (cur === r.id ? null : r.id))}
+                      <a
+                        href={`/api/pdf/${r.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         style={{
                           padding: '6px 12px',
                           background: '#1a237e',
                           color: '#fff',
-                          border: 'none',
                           borderRadius: 8,
                           fontWeight: 700,
                           fontSize: '0.76rem',
-                          cursor: 'pointer',
+                          textDecoration: 'none',
+                          display: 'inline-block',
                         }}
                       >
-                        {pdfAbertoParaId === r.id ? 'Ocultar PDF' : 'Ver PDF'}
-                      </button>
+                        Ver relatório
+                      </a>
                     </div>
                   </div>
 
@@ -339,24 +338,6 @@ export function HistoricoClient({ relatorios, categorias, atividades, operadores
                     {r.versao > 1 && <span>· v{r.versao}</span>}
                     {r.relatorista_nome && <span>· {r.relatorista_nome}</span>}
                   </div>
-
-                  {pdfAbertoParaId === r.id && (
-                    <div style={{ marginTop: 10 }}>
-                      <iframe
-                        title={`PDF relatório ${r.id}`}
-                        src={`/api/pdf/${r.id}`}
-                        style={{
-                          width: '100%',
-                          height: 'min(70vh, 640px)',
-                          minHeight: 280,
-                          border: '1.5px solid #e2e8f0',
-                          borderRadius: 12,
-                          background: '#f1f5f9',
-                          display: 'block',
-                        }}
-                      />
-                    </div>
-                  )}
 
                   <div style={{ marginTop: 10 }}>
                     {confirmId === r.id ? (

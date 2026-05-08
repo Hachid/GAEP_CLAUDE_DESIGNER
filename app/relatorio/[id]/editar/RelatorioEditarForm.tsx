@@ -81,6 +81,7 @@ export function RelatorioEditarForm({
   const [descricao, setDescricao] = useState(relatorio.descricao_revisada)
   const [ocorrencias, setOcorrencias] = useState(relatorio.ocorrencias ?? '')
   const [salvando, setSalvando] = useState(false)
+  const [uploadingFoto, setUploadingFoto] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [ok, setOk] = useState(false)
 
@@ -141,17 +142,6 @@ export function RelatorioEditarForm({
           Editar relatório
         </h1>
       </div>
-
-      {erro && (
-        <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '12px 14px', color: '#ef4444', fontWeight: 700, fontSize: '0.85rem', marginBottom: 12 }}>
-          {erro}
-        </div>
-      )}
-      {ok && (
-        <div style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.25)', borderRadius: 10, padding: '12px 14px', color: '#16a34a', fontWeight: 700, fontSize: '0.85rem', marginBottom: 12 }}>
-          Alterações salvas.
-        </div>
-      )}
 
       <DateTimeBlock
         date={data}
@@ -217,6 +207,7 @@ export function RelatorioEditarForm({
         data={data}
         initialUrls={relatorio.fotos_urls ?? []}
         onUpload={setFotosUrls}
+        onUploadingChange={setUploadingFoto}
       />
 
       <DescricaoMic value={descricao} onChange={setDescricao} />
@@ -233,33 +224,55 @@ export function RelatorioEditarForm({
         />
       </div>
 
+      {erro && (
+        <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '12px 14px', color: '#ef4444', fontWeight: 700, fontSize: '0.85rem', marginBottom: 12 }}>
+          {erro}
+        </div>
+      )}
+      {ok && (
+        <div style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.25)', borderRadius: 10, padding: '12px 14px', color: '#16a34a', fontWeight: 700, fontSize: '0.85rem', marginBottom: 12 }}>
+          Alterações salvas.
+        </div>
+      )}
+
       <button
         type="button"
         onClick={handleSalvar}
-        disabled={salvando}
+        disabled={salvando || uploadingFoto}
         style={{
           width: '100%',
           padding: '14px',
-          background: '#1a237e',
+          background: salvando || uploadingFoto ? '#94a3b8' : '#1a237e',
           color: '#fff',
           border: 'none',
           borderRadius: 10,
           fontWeight: 800,
           fontSize: '0.95rem',
-          cursor: salvando ? 'not-allowed' : 'pointer',
+          cursor: salvando || uploadingFoto ? 'not-allowed' : 'pointer',
           marginBottom: 12,
         }}
       >
-        {salvando ? 'Salvando...' : 'Salvar alterações'}
+        {uploadingFoto ? '⏳ Aguardando upload...' : salvando ? 'Salvando...' : 'Salvar alterações'}
       </button>
 
-      <Link
-        href={`/relatorio/${relatorio.id}`}
-        prefetch={false}
-        style={{ display: 'block', textAlign: 'center', color: '#64748b', fontWeight: 600, fontSize: '0.88rem' }}
+      <a
+        href={`/api/pdf/${relatorio.id}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: 'block',
+          textAlign: 'center',
+          padding: '12px',
+          background: 'rgba(26,35,126,0.06)',
+          color: '#1a237e',
+          borderRadius: 10,
+          fontWeight: 700,
+          fontSize: '0.88rem',
+          textDecoration: 'none',
+        }}
       >
-        Ver relatório (somente leitura)
-      </Link>
+        Ver relatório em PDF
+      </a>
     </div>
   )
 }

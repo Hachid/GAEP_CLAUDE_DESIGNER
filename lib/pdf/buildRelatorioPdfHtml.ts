@@ -321,9 +321,11 @@ export function buildRelatorioPdfHtml(m: RelatorioPdfHtmlModel): string {
       margin: 8pt 0 6pt 0;
     }
     .corpo-descricao-atividade {
-      white-space: pre-wrap;
+      white-space: pre-line;
       word-wrap: break-word;
       overflow-wrap: break-word;
+      text-align: justify;
+      text-indent: 1.5em;
       box-sizing: border-box;
       margin: 0;
       padding: 0 0 3pt 0;
@@ -332,9 +334,10 @@ export function buildRelatorioPdfHtml(m: RelatorioPdfHtmlModel): string {
     }
     .bloco-ocorrencias {
       margin: 0 0 12pt 0;
-      padding: 0;
-      border: none !important;
-      background: transparent !important;
+      padding: 8pt 10pt;
+      border-left: 2.5pt solid #eab308 !important;
+      background: rgba(254, 240, 138, 0.4) !important;
+      border-radius: 5pt;
     }
     .bloco-texto { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; margin-bottom: 10pt; }
     /* Fotos: título + grade ficam juntos (evita título órfão); cards não cortam ao meio. */
@@ -505,7 +508,7 @@ export function buildRelatorioPdfHtml(m: RelatorioPdfHtmlModel): string {
         ${
           m.ocorrencias
             ? `<div class="bloco-ocorrencias">
-            <h2 style="${secTitleCss()}">Ocorrências / observações</h2>
+            <h2 style="${secTitleCss()}">⚠️ Ocorrências / observações</h2>
             <div class="bloco-texto" style="${stDesc}">${escapeHtml(m.ocorrencias)}</div>
           </div>`
             : ''

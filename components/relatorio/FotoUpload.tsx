@@ -10,6 +10,8 @@ interface FotoUploadProps {
   atividade: string
   data: string
   onUpload: (urls: string[]) => void
+  /** Chamado com `true` quando upload inicia e `false` quando termina. */
+  onUploadingChange?: (uploading: boolean) => void
   /** URLs já persistidas (ex.: edição de relatório). Sincroniza quando a assinatura muda. */
   initialUrls?: string[]
 }
@@ -23,7 +25,7 @@ interface FotoUploadProps {
  * - Exibe thumbnails 65×65px após o upload bem-sucedido.
  */
 export function FotoUpload(props: FotoUploadProps) {
-  const { categoria, atividade, data, onUpload, initialUrls } = props
+  const { categoria, atividade, data, onUpload, onUploadingChange, initialUrls } = props
   const inputRef = useRef<HTMLInputElement>(null)
   const [previews, setPreviews] = useState<string[]>([])
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([])
@@ -54,6 +56,7 @@ export function FotoUpload(props: FotoUploadProps) {
     if (remaining <= 0) return
     const selected = Array.from(files).slice(0, remaining)
     setUploading(true)
+    onUploadingChange?.(true)
     setErroUpload(null)
 
     const newUrls: string[] = []
@@ -87,6 +90,7 @@ export function FotoUpload(props: FotoUploadProps) {
     setPreviews((p) => [...p, ...newPreviews])
     onUpload(merged)
     setUploading(false)
+    onUploadingChange?.(false)
   }
 
   const labelStyle: React.CSSProperties = {

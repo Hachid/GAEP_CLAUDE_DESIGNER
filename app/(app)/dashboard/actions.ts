@@ -337,7 +337,7 @@ export async function fetchRelatoriosParaConsolidadoPdf(
   let q = admin
     .from('relatorios')
     .select(
-      `id, data, descricao_revisada, fotos_urls, relatorista_id,
+      `id, data, descricao_revisada, ocorrencias, fotos_urls, relatorista_id,
        atividades(id, nome),
        categorias_atividade(id, nome)`
     )
@@ -362,6 +362,7 @@ export async function fetchRelatoriosParaConsolidadoPdf(
     id: string
     data: string
     descricao_revisada: string
+    ocorrencias: string | null
     fotos_urls: unknown
     relatorista_id: string | null
     atividades: { id: string; nome: string } | { id: string; nome: string }[] | null
@@ -383,6 +384,7 @@ export async function fetchRelatoriosParaConsolidadoPdf(
       id: r.id,
       data: r.data,
       descricao_revisada: r.descricao_revisada ?? '',
+      ocorrencias: r.ocorrencias ?? null,
       fotos_urls: r.fotos_urls,
       categoriaNome: cat?.nome ?? null,
       atividadeNome: at?.nome ?? null,

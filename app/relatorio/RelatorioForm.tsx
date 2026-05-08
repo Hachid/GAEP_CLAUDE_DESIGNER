@@ -121,6 +121,7 @@ export function RelatorioForm({
   // ── Estado da UI ──────────────────────────────────────────────
   const [iaLoading, setIaLoading] = useState(false)
   const [salvando, setSalvando] = useState(false)
+  const [uploadingFoto, setUploadingFoto] = useState(false)
   const [descricaoRevisada, setDescricaoRevisada] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [relatorioSalvoId, setRelatorioSalvoId] = useState<string | null>(null)
@@ -409,6 +410,7 @@ export function RelatorioForm({
         atividade={atividadeSelecionada?.nome ?? 'ATIVIDADE'}
         data={data}
         onUpload={setFotosUrls}
+        onUploadingChange={setUploadingFoto}
       />
 
       {/* Descrição + Mic */}
@@ -419,7 +421,7 @@ export function RelatorioForm({
         onSalvarDireto={handleSalvarDireto}
         onRedigirIA={handleRedigirIA}
         iaLoading={iaLoading}
-        salvando={salvando}
+        salvando={salvando || uploadingFoto}
       />
 
       {/* Feedback */}

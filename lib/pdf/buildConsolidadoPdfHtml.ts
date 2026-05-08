@@ -95,17 +95,20 @@ function barRowsForGroup(items: AtividadeStat[]): string {
 }
 
 function buildChartsHtml(kpi: KPIData, evolucao: EvolucaoMes[]): string {
+  const totalCatMin = kpi.porCategoria.reduce((acc, c) => acc + c.totalMinutos, 0)
   const maxCat = Math.max(1, ...kpi.porCategoria.map((c) => c.totalMinutos))
   const donutRows = kpi.porCategoria
     .map((c) => {
-      const pct = Math.round((c.totalMinutos / maxCat) * 100)
+      const pctBar = Math.round((c.totalMinutos / maxCat) * 100)
+      const pctTotal = totalCatMin > 0 ? Math.round((c.totalMinutos / totalCatMin) * 100) : 0
       const color = CAT_COLORS[c.nome] ?? '#64748b'
       return `<tr>
         <td style="padding:4pt 6pt;border-bottom:0.5pt solid #e2e8f0;font-weight:700;font-size:8.5pt;">${escapeHtml(c.nome)}</td>
         <td style="padding:4pt 6pt;border-bottom:0.5pt solid #e2e8f0;font-size:8.5pt;text-align:right;">${escapeHtml(formatMinutos(c.totalMinutos))}</td>
-        <td style="padding:4pt 6pt;border-bottom:0.5pt solid #e2e8f0;width:38%;">
+        <td style="padding:4pt 6pt;border-bottom:0.5pt solid #e2e8f0;font-size:8.5pt;font-weight:700;text-align:right;color:${color};">${pctTotal}%</td>
+        <td style="padding:4pt 6pt;border-bottom:0.5pt solid #e2e8f0;width:32%;">
           <div style="height:7pt;background:#e2e8f0;border-radius:2pt;overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${color};"></div>
+            <div style="height:100%;width:${pctBar}%;background:${color};"></div>
           </div>
         </td>
       </tr>`
@@ -150,6 +153,7 @@ function buildChartsHtml(kpi: KPIData, evolucao: EvolucaoMes[]): string {
           <thead><tr>
             <th style="text-align:left;font-size:7pt;color:#64748b;padding:2pt 6pt;">Categoria</th>
             <th style="text-align:right;font-size:7pt;color:#64748b;padding:2pt 6pt;">Total</th>
+            <th style="text-align:right;font-size:7pt;color:#64748b;padding:2pt 6pt;">%</th>
             <th style="font-size:7pt;color:#64748b;padding:2pt 6pt;">Proporção</th>
           </tr></thead>
           <tbody>${donutRows}</tbody>
@@ -245,11 +249,17 @@ export function buildConsolidadoPdfHtml(m: ConsolidadoPdfModel): string {
             const cat = r.categoriaNome ?? '—'
             const atv = r.atividadeNome ?? '—'
             const relNome = r.relatoristaNome?.trim() || 'Não informado'
+            const ocorrBlock = r.ocorrencias?.trim()
+              ? `<div style="margin-top:5pt;padding:5pt 8pt;background:rgba(254,240,138,0.4);border-left:2pt solid #eab308;border-radius:4pt;font-size:8.5pt;line-height:1.35;color:#78350f;">
+                  <strong>⚠️ Ocorrências:</strong> ${escapeHtml(r.ocorrencias!.trim())}
+                </div>`
+              : ''
             return `<div class="descricao-item">
           <div class="descricao-meta">${escapeHtml(fmtDataBr(r.data))} · ${escapeHtml(cat)} · ${escapeHtml(atv)}</div>
           <p class="descricao-texto corpo-descricao-atividade" style="${stDesc}">
             <span class="descricao-corpo-pre">${escapeHtml(r.descricao_revisada)}</span><span class="relatorista-inline"> Relatorista: ${escapeHtml(relNome)}</span>
           </p>
+          ${ocorrBlock}
         </div>`
           })
           .join('')
@@ -337,13 +347,15 @@ export function buildConsolidadoPdfHtml(m: ConsolidadoPdfModel): string {
     .descricao-texto {
       margin: 0; padding: 0; font-size: 10px; line-height: 1.35; color: #0f172a;
       overflow-wrap: break-word; word-wrap: break-word; white-space: normal;
+      text-align: justify; text-indent: 1.5em;
       orphans: 2; widows: 2;
     }
     .descricao-corpo-pre {
-      white-space: pre-wrap; overflow-wrap: break-word; word-wrap: break-word;
+      white-space: pre-line; overflow-wrap: break-word; word-wrap: break-word;
     }
     .relatorista-inline {
       font-size: 8px; font-style: italic; color: rgba(0, 0, 0, 0.5); margin-left: 4px;
+      text-indent: 0;
     }
     .corpo-descricao-atividade {
       word-wrap: break-word; overflow-wrap: break-word;
@@ -361,7 +373,7 @@ export function buildConsolidadoPdfHtml(m: ConsolidadoPdfModel): string {
     }
     .foto-box {
       height: 52mm; display: flex; align-items: center; justify-content: center;
-      overflow: hidden; background: rgba(248, 250, 252, 0.9);
+      overflow: hidden; background: transparent;
     }
     .foto-box img {
       max-width: 100%; max-height: 100%; object-fit: contain; display: block;

@@ -59,6 +59,7 @@ export type RelatorioLinhaConsolidado = {
   id: string
   data: string
   descricao_revisada: string
+  ocorrencias: string | null
   fotos_urls: unknown
   categoriaNome: string | null
   atividadeNome: string | null
