@@ -132,7 +132,7 @@ export async function criarOperador(input: {
   }
 
   try {
-    const { admin, operadorId: adminId, gaepId: adminGaepId } = await getAdminCtx()
+    const { admin, operadorId: adminId } = await getAdminCtx()
 
     const senha = input.senha.trim() || '1234'
     const { data: authData, error: authErr } = await admin.auth.admin.createUser({

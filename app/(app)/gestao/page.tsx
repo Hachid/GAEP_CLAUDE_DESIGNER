@@ -24,7 +24,7 @@ import { DEFAULT_PRINT_MARGINS_MM } from '@/lib/pdf/relatorioIntegrity'
 export default async function GestaoPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ tab?: string }> | { tab?: string }
+  searchParams?: Promise<{ tab?: string }>
 }) {
   // ── 1. Auth ───────────────────────────────────────────────────
   const supabase = await createClient()
@@ -295,7 +295,7 @@ export default async function GestaoPage({
   }
 
   // ── 5. Log de acesso (fire-and-forget) ───────────────────────
-  const resolvedParams = searchParams instanceof Promise ? await searchParams : (searchParams ?? {})
+  const resolvedParams = searchParams ? await searchParams : {}
   logAudit({
     gaepId: gaep.id,
     operadorId: operador.id,
