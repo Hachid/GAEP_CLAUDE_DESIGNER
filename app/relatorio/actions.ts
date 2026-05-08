@@ -23,6 +23,10 @@ export interface SalvarRelatorioInput {
   fotosUrls: string[]
   /** IDs dos operadores participantes. */
   equipe: string[]
+  /** true quando o turno termina em outro dia (Plantão). */
+  plantao?: boolean
+  /** Data de término do plantão (YYYY-MM-DD). Só presente quando plantao=true. */
+  dataFim?: string
 }
 
 /** Resultado da operação de salvamento. */
@@ -229,6 +233,8 @@ export async function salvarRelatorio(
       hora_inicio: input.horaInicio || null,
       hora_fim: input.horaFim || null,
       horas_totais: input.horasTotais > 0 ? input.horasTotais : null,
+      plantao: input.plantao ?? false,
+      data_fim: input.plantao && input.dataFim ? input.dataFim : null,
       categoria_id: input.categoriaId || null,
       atividade_id: input.atividadeId || null,
       outros_integrantes: input.outrosIntegrantes.trim() || null,

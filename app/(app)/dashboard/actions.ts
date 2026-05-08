@@ -16,8 +16,11 @@ import type {
 
 type RelRow = {
   id: string
+  data: string
   hora_inicio: string
   hora_fim: string
+  plantao: boolean | null
+  data_fim: string | null
   atividade_id: string
   relatorista_id: string | null
   atividades: { id: string; nome: string } | { id: string; nome: string }[] | null
@@ -35,7 +38,7 @@ async function computeKPI(gaepId: string, filtros: DashboardFiltros): Promise<KP
   let baseQuery = admin
     .from('relatorios')
     .select(
-      `id, hora_inicio, hora_fim, atividade_id, relatorista_id,
+      `id, data, hora_inicio, hora_fim, plantao, data_fim, atividade_id, relatorista_id,
        atividades!inner(id, nome),
        categorias_atividade(id, nome)`
     )
@@ -62,7 +65,10 @@ async function computeKPI(gaepId: string, filtros: DashboardFiltros): Promise<KP
     if (!at) continue
     const cat = pickFirst(r.categorias_atividade)
     if (!cat) continue
-    const mins = minutesBetween(r.hora_inicio, r.hora_fim)
+    const isPlantao = (r.plantao ?? false) && !!r.data_fim && r.data_fim > r.data
+    const mins = isPlantao
+      ? Math.round((new Date(`${r.data_fim}T${r.hora_fim}`).getTime() - new Date(`${r.data}T${r.hora_inicio}`).getTime()) / 60000)
+      : minutesBetween(r.hora_inicio, r.hora_fim)
 
     totalMinutos += mins
 
@@ -184,6 +190,8 @@ type RelComPartsRow = {
   data: string
   hora_inicio: string
   hora_fim: string
+  plantao: boolean | null
+  data_fim: string | null
   relatorista_id: string | null
   relatorio_participantes: PartRow[]
 }
@@ -211,7 +219,7 @@ async function _fetchEvolucaoRaw(gaepId: string): Promise<EvolucaoMes[]> {
   const [relRes, diasRes] = await Promise.all([
     admin
       .from('relatorios')
-      .select('data, hora_inicio, hora_fim, relatorista_id, relatorio_participantes(operador_id, hora_inicio, hora_fim)')
+      .select('data, hora_inicio, hora_fim, plantao, data_fim, relatorista_id, relatorio_participantes(operador_id, hora_inicio, hora_fim)')
       .eq('gaep_id', gaepId)
       .is('deleted_at', null)
       .gte('data', dataCorte)
@@ -253,16 +261,22 @@ async function _fetchEvolucaoRaw(gaepId: string): Promise<EvolucaoMes[]> {
 
     const parts = rel.relatorio_participantes ?? []
 
+    const isPlantaoRel = (rel.plantao ?? false) && !!rel.data_fim && rel.data_fim > rel.data
+
     if (parts.length > 0) {
       for (const p of parts) {
         const inicio = p.hora_inicio ?? rel.hora_inicio
         const fim = p.hora_fim ?? rel.hora_fim
-        const mins = minutesBetween(inicio, fim)
+        const mins = isPlantaoRel
+          ? Math.round((new Date(`${rel.data_fim}T${fim}`).getTime() - new Date(`${rel.data}T${inicio}`).getTime()) / 60000)
+          : minutesBetween(inicio, fim)
         entry.minutos += mins
         entry.opMins.set(p.operador_id, (entry.opMins.get(p.operador_id) ?? 0) + mins)
       }
     } else if (rel.relatorista_id) {
-      const mins = minutesBetween(rel.hora_inicio, rel.hora_fim)
+      const mins = isPlantaoRel
+        ? Math.round((new Date(`${rel.data_fim}T${rel.hora_fim}`).getTime() - new Date(`${rel.data}T${rel.hora_inicio}`).getTime()) / 60000)
+        : minutesBetween(rel.hora_inicio, rel.hora_fim)
       entry.minutos += mins
       entry.opMins.set(rel.relatorista_id, (entry.opMins.get(rel.relatorista_id) ?? 0) + mins)
     }

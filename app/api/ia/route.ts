@@ -8,6 +8,8 @@ interface IARequestBody {
   gaepId: string
   data: string
   horario: string
+  plantao?: boolean
+  dataFim?: string
   categoria: string
   atividade: string
   equipe: string[]
@@ -20,7 +22,7 @@ interface OpenAIResponse {
     message: { content: string }
     finish_reason: string
   }>
-  error?: { message: string }
+  error?: { message: string; code?: string; type?: string }
 }
 
 /**
@@ -62,7 +64,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Body inválido.' }, { status: 400 })
   }
 
-  const { gaepId, data, horario, categoria, atividade, equipe, descricaoBruta } = body
+  const { gaepId, data, horario, plantao: isPlantao, dataFim, categoria, atividade, equipe, descricaoBruta } = body
 
   if (!descricaoBruta?.trim()) {
     return NextResponse.json({ error: 'Descrição bruta não pode estar vazia.' }, { status: 400 })
@@ -91,10 +93,8 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 4. Montar prompt e chamar OpenAI ──────────────────────────
-  // Formata data de YYYY-MM-DD para DD/MM/AAAA
-  const dataFormatada = data
-    ? data.split('-').reverse().join('/')
-    : 'data não informada'
+  const fmtData = (iso: string) => iso.split('-').reverse().join('/')
+  const dataFormatada = data ? fmtData(data) : 'data não informada'
 
   const plural = equipe.length !== 1
   const sujeito = plural
@@ -102,7 +102,6 @@ export async function POST(req: NextRequest) {
     : `o operador ${equipe[0] ?? ''}`
   const verbo = plural ? 'realizaram' : 'realizou'
 
-  // Converte o nome da categoria (infinitivo) para substantivo concordado
   function nominarCategoria(cat: string): { artigo: string; nome: string } {
     switch (cat.toUpperCase().trim()) {
       case 'OPERAR':   return { artigo: 'a', nome: 'operação' }
@@ -120,7 +119,16 @@ export async function POST(req: NextRequest) {
     catStr = atividade ? `a atividade de ${atividade}` : 'a atividade'
   }
 
-  const abertura = `No dia ${dataFormatada} no período de ${horario}, ${sujeito}, ${verbo} ${catStr}, e `
+  // Período: diferencia plantão multi-dia de turno normal
+  let periodoStr: string
+  if (isPlantao && dataFim && dataFim > (data ?? '')) {
+    const [horaInicio, horaFim] = horario.split(' às ')
+    periodoStr = `às ${horaInicio ?? horario} até o dia ${fmtData(dataFim)} às ${horaFim ?? horario}`
+  } else {
+    periodoStr = `no período de ${horario}`
+  }
+
+  const abertura = `No dia ${dataFormatada} ${periodoStr}, ${sujeito}, ${verbo} ${catStr}, e `
 
   const userPrompt = [
     `Escreva o relatório operacional OBRIGATORIAMENTE iniciando com a seguinte frase (não altere nem omita nenhuma palavra desta abertura):`,
@@ -135,9 +143,16 @@ export async function POST(req: NextRequest) {
     `Retorne APENAS o texto completo do relatório. Sem títulos, sem comentários, sem formatação adicional.`,
   ].join('\n')
 
-  const openaiKey = process.env.OPENAI_API_KEY
+  const openaiKey = process.env.OPENAI_API_KEY?.trim()
   if (!openaiKey) {
-    console.error('[/api/ia] OPENAI_API_KEY não definida.')
+    console.error('[/api/ia] OPENAI_API_KEY não definida no ambiente.')
+    return NextResponse.json(
+      { error: 'Serviço de IA temporariamente indisponível.' },
+      { status: 503 }
+    )
+  }
+  if (!openaiKey.startsWith('sk-') || openaiKey.length < 40) {
+    console.error('[/api/ia] OPENAI_API_KEY com formato inválido — comprimento:', openaiKey.length, '| prefixo:', openaiKey.slice(0, 6))
     return NextResponse.json(
       { error: 'Serviço de IA temporariamente indisponível.' },
       { status: 503 }
@@ -177,15 +192,37 @@ export async function POST(req: NextRequest) {
   try {
     json = (await openaiRes.json()) as OpenAIResponse
   } catch {
-    return NextResponse.json({ error: 'Resposta inválida da IA.' }, { status: 502 })
+    console.error('[/api/ia] Falha ao parsear resposta da OpenAI. Status:', openaiRes.status)
+    return NextResponse.json({ error: 'Resposta inválida da IA. Tente novamente.' }, { status: 502 })
   }
 
   if (!openaiRes.ok || json.error) {
-    console.error('[/api/ia] OpenAI retornou erro:', json.error)
-    return NextResponse.json(
-      { error: json.error?.message ?? 'A IA retornou um erro inesperado.' },
-      { status: 502 }
+    console.error(
+      '[/api/ia] OpenAI erro HTTP', openaiRes.status,
+      '| code:', json.error?.code ?? '—',
+      '| type:', json.error?.type ?? '—',
+      '| key_sufixo: ...', openaiKey.slice(-4),
+      '| modelo:', configData.modelo,
+      '| msg:', json.error?.message ?? '(sem mensagem)'
     )
+
+    const mensagemAmigavel = (() => {
+      if (json.error?.code === 'invalid_api_key') return 'Chave da API de IA inválida ou expirada. Contate o administrador.'
+      if (json.error?.code === 'insufficient_quota') return 'Cota da API de IA esgotada. Contate o administrador.'
+      if (json.error?.code === 'model_not_found') return 'Modelo de IA não encontrado. Contate o administrador.'
+      if (json.error?.code === 'context_length_exceeded') return 'Texto muito longo para o modelo. Reduza o tamanho da descrição.'
+      switch (openaiRes.status) {
+        case 400: return 'Parâmetros inválidos para a IA. Contate o administrador.'
+        case 401: return 'Chave da API de IA inválida ou expirada. Contate o administrador.'
+        case 429: return 'Limite de requisições da IA atingido. Aguarde alguns minutos e tente novamente.'
+        case 500:
+        case 502:
+        case 503: return 'Serviço de IA temporariamente indisponível. Tente novamente em instantes.'
+        default:  return 'Erro inesperado ao processar com a IA. Tente novamente.'
+      }
+    })()
+
+    return NextResponse.json({ error: mensagemAmigavel }, { status: 502 })
   }
 
   const descricaoRevisada = json.choices[0]?.message?.content?.trim()

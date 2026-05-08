@@ -67,14 +67,26 @@ const inputStyle: React.CSSProperties = {
 }
 
 /**
- * Calcula o total de horas entre dois horários no formato "HH:MM".
- * Suporta virada de meia-noite (ex.: 22:00 → 06:00 = 8h).
+ * Calcula o total de horas. Quando plantão=true e dataFim > data, usa
+ * aritmética de datas para suportar turnos de 24h+.
  */
-function calcHorasTotais(horaInicio: string, horaFim: string): number {
+function calcHorasTotais(
+  horaInicio: string,
+  horaFim: string,
+  data: string,
+  dataFim: string | null,
+  plantao: boolean
+): number {
   if (!horaInicio || !horaFim) return 0
+  if (plantao && dataFim && dataFim > data && data) {
+    const start = new Date(`${data}T${horaInicio}:00`)
+    const end = new Date(`${dataFim}T${horaFim}:00`)
+    const mins = (end.getTime() - start.getTime()) / 60000
+    return Math.max(0, Math.round((mins / 60) * 100) / 100)
+  }
   const [sh, sm] = horaInicio.split(':').map(Number)
   const [eh, em] = horaFim.split(':').map(Number)
-  let mins = (eh * 60 + em) - (sh * 60 + sm)
+  let mins = eh * 60 + em - (sh * 60 + sm)
   if (mins < 0) mins += 24 * 60
   return Math.round((mins / 60) * 100) / 100
 }
@@ -97,6 +109,8 @@ export function RelatorioForm({
   const [data, setData] = useState('')
   const [horaInicio, setHoraInicio] = useState('08:00')
   const [horaFim, setHoraFim] = useState('15:00')
+  const [plantao, setPlantao] = useState(false)
+  const [dataFim, setDataFim] = useState('')
   const [categoriaId, setCategoriaId] = useState('')
   const [atividadeId, setAtividadeId] = useState('')
   const [outrosIntegrantes, setOutrosIntegrantes] = useState('')
@@ -127,6 +141,8 @@ export function RelatorioForm({
     setData(new Date().toISOString().split('T')[0])
     setHoraInicio('08:00')
     setHoraFim('15:00')
+    setPlantao(false)
+    setDataFim('')
     setCategoriaId('')
     setAtividadeId('')
     setOutrosIntegrantes('')
@@ -174,7 +190,9 @@ export function RelatorioForm({
         data,
         horaInicio,
         horaFim,
-        horasTotais: calcHorasTotais(horaInicio, horaFim),
+        horasTotais: calcHorasTotais(horaInicio, horaFim, data, plantao ? dataFim : null, plantao),
+        plantao,
+        dataFim: plantao && dataFim ? dataFim : undefined,
         categoriaId,
         atividadeId,
         outrosIntegrantes,
@@ -220,6 +238,8 @@ export function RelatorioForm({
           gaepId,
           data,
           horario: horaInicio && horaFim ? `${horaInicio} às ${horaFim}` : 'horário não informado',
+          plantao: plantao && !!dataFim && dataFim > data,
+          dataFim: plantao && dataFim && dataFim > data ? dataFim : undefined,
           categoria: categoriaSelecionada?.nome ?? '',
           atividade: atividadeSelecionada?.nome ?? '',
           equipe: equipeNomes,
@@ -270,7 +290,9 @@ export function RelatorioForm({
         data,
         horaInicio,
         horaFim,
-        horasTotais: calcHorasTotais(horaInicio, horaFim),
+        horasTotais: calcHorasTotais(horaInicio, horaFim, data, plantao ? dataFim : null, plantao),
+        plantao,
+        dataFim: plantao && dataFim ? dataFim : undefined,
         categoriaId,
         atividadeId,
         outrosIntegrantes,
@@ -315,6 +337,10 @@ export function RelatorioForm({
         onDateChange={setData}
         onStartChange={setHoraInicio}
         onEndChange={setHoraFim}
+        plantao={plantao}
+        dataFim={dataFim}
+        onPlantaoChange={setPlantao}
+        onDataFimChange={setDataFim}
       />
 
       {/* Categoria + Atividade */}

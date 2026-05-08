@@ -139,7 +139,8 @@ export async function GET(req: Request) {
     )
   }
 
-  const base = `desempenho-${sanitizeFilenamePart(nomeOperador)}-${dataInicio}-${dataFim}`
+  const fmtDataPdf = (iso: string) => iso.split('-').reverse().join('-') // YYYY-MM-DD → DD-MM-AAAA
+  const base = `${sanitizeFilenamePart(nomeOperador)} ${fmtDataPdf(dataInicio)} a ${fmtDataPdf(dataFim)}`
   const filenamePdf = `${base}.pdf`
   const disposition = download ? `attachment; filename="${filenamePdf}"` : `inline; filename="${filenamePdf}"`
 

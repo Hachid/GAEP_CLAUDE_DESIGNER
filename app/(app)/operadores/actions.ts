@@ -8,6 +8,8 @@ import type { DesempenhoFiltros, DesempenhoData, FolhaDia, FolhaRow } from './ty
 type RelRow = {
   id: string
   data: string
+  data_fim: string | null
+  plantao: boolean | null
   hora_inicio: string | null
   hora_fim: string | null
   atividades: { id: string; nome: string } | null
@@ -32,7 +34,7 @@ async function fetchRelatoriosOperador(
   const { data } = await admin
     .from('relatorios')
     .select(
-      `id, data, hora_inicio, hora_fim,
+      `id, data, data_fim, plantao, hora_inicio, hora_fim,
        atividades!inner(id, nome),
        categorias_atividade(id, nome)`
     )
@@ -78,7 +80,10 @@ export async function fetchDesempenhoData(
 
     for (const r of rows) {
       if (!r.atividades || !r.categorias_atividade || !r.hora_inicio || !r.hora_fim) continue
-      const mins = minutesBetween(r.hora_inicio, r.hora_fim)
+      const isPlantao = (r.plantao ?? false) && !!r.data_fim && r.data_fim > r.data
+      const mins = isPlantao
+        ? Math.round((new Date(`${r.data_fim}T${r.hora_fim}`).getTime() - new Date(`${r.data}T${r.hora_inicio}`).getTime()) / 60000)
+        : minutesBetween(r.hora_inicio, r.hora_fim)
       const cat = r.categorias_atividade
       const at = r.atividades
 
@@ -114,6 +119,10 @@ export async function fetchDesempenhoData(
         inicio: r.hora_inicio.slice(0, 5),
         fim: r.hora_fim.slice(0, 5),
         totalMinutos: mins,
+        plantao: isPlantao || undefined,
+        dataFimFormatada: isPlantao && r.data_fim
+          ? (() => { const [, m, d] = r.data_fim!.split('-'); return `${d}/${m}` })()
+          : undefined,
       }
       const existing = diaMap.get(r.data)
       if (existing) {

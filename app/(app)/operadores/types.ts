@@ -10,6 +10,8 @@ export type FolhaRow = {
   inicio: string       // "HH:MM"
   fim: string          // "HH:MM"
   totalMinutos: number
+  plantao?: boolean
+  dataFimFormatada?: string  // "DD/MM" — só presente em plantões multi-dia
 }
 
 export type FolhaDia = {

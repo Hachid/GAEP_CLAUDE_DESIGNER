@@ -151,13 +151,17 @@ function buildFolhaTableHtml(folha: FolhaDia[], totalMinutos: number): string {
     .map((dia, di) => {
       const linhasDia = dia.rows
         .map(
-          (r, ri) => `<tr style="border-bottom:0.5pt solid #f1f5f9;">
+          (r, ri) => {
+            const isP = r.plantao && r.dataFimFormatada
+            const rowBg = isP ? 'background:rgba(124,58,237,0.05);border-left:2pt solid #7c3aed;' : ''
+            return `<tr style="border-bottom:0.5pt solid #f1f5f9;${rowBg}">
           <td style="padding:4pt 4pt;font-size:8pt;font-weight:700;color:#1a237e;white-space:nowrap;">${ri === 0 ? escapeHtml(dia.dataFormatada) : ''}</td>
-          <td style="padding:4pt 4pt;font-size:7.9pt;font-weight:600;color:#334155;">${escapeHtml(r.atividade)}</td>
+          <td style="padding:4pt 4pt;font-size:7.9pt;font-weight:600;color:${isP ? '#7c3aed' : '#334155'};">${isP ? '🌙 ' : ''}${escapeHtml(r.atividade)}</td>
           <td style="padding:4pt 4pt;text-align:center;font-size:8pt;color:#475569;">${escapeHtml(r.inicio)}</td>
-          <td style="padding:4pt 4pt;text-align:center;font-size:8pt;color:#475569;">${escapeHtml(r.fim)}</td>
-          <td style="padding:4pt 4pt;text-align:center;font-size:8pt;font-weight:700;color:#475569;">${escapeHtml(formatMinutos(r.totalMinutos))}</td>
+          <td style="padding:4pt 4pt;text-align:center;font-size:8pt;color:#475569;">${escapeHtml(r.fim)}${isP ? `<span style="font-size:6.5pt;color:#7c3aed;"> (${escapeHtml(r.dataFimFormatada!)})</span>` : ''}</td>
+          <td style="padding:4pt 4pt;text-align:center;font-size:8pt;font-weight:700;color:${isP ? '#7c3aed' : '#475569'};">${escapeHtml(formatMinutos(r.totalMinutos))}</td>
         </tr>`
+          }
         )
         .join('')
 

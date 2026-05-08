@@ -169,7 +169,14 @@ export function FolhaPonto({ dias, totalMinutos, totalRegistros, cargaHorariaPre
               {dias.map((dia, di) => (
                 <React.Fragment key={dia.dataISO}>
                   {dia.rows.map((r, ri) => (
-                    <tr key={`${di}-${ri}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <tr
+                      key={`${di}-${ri}`}
+                      style={{
+                        borderBottom: '1px solid #f1f5f9',
+                        background: r.plantao ? 'rgba(124,58,237,0.05)' : undefined,
+                        borderLeft: r.plantao ? '3px solid #7c3aed' : undefined,
+                      }}
+                    >
                       <td
                         style={{
                           padding: '7px 4px',
@@ -184,11 +191,12 @@ export function FolhaPonto({ dias, totalMinutos, totalRegistros, cargaHorariaPre
                       <td
                         style={{
                           padding: '7px 4px',
-                          color: '#334155',
+                          color: r.plantao ? '#7c3aed' : '#334155',
                           fontWeight: 600,
                           fontSize: '0.79rem',
                         }}
                       >
+                        {r.plantao && <span style={{ marginRight: 4 }}>🌙</span>}
                         {r.atividade}
                       </td>
                       <td style={{ padding: '7px 4px', textAlign: 'center', color: '#475569' }}>
@@ -196,13 +204,18 @@ export function FolhaPonto({ dias, totalMinutos, totalRegistros, cargaHorariaPre
                       </td>
                       <td style={{ padding: '7px 4px', textAlign: 'center', color: '#475569' }}>
                         {r.fim}
+                        {r.plantao && r.dataFimFormatada && (
+                          <span style={{ fontSize: '0.68rem', color: '#7c3aed', marginLeft: 3 }}>
+                            ({r.dataFimFormatada})
+                          </span>
+                        )}
                       </td>
                       <td
                         style={{
                           padding: '7px 4px',
                           textAlign: 'center',
                           fontWeight: 700,
-                          color: '#475569',
+                          color: r.plantao ? '#7c3aed' : '#475569',
                         }}
                       >
                         {formatMinutos(r.totalMinutos)}
