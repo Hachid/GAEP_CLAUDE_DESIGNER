@@ -1,7 +1,8 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useEffect } from 'react'
 import Image from 'next/image'
+import { createClient } from '@/lib/supabase/client'
 import { loginAction, type LoginState } from './actions'
 
 interface Operador {
@@ -26,6 +27,12 @@ export function LoginForm({
     loginAction,
     null
   )
+
+  // Limpa qualquer sessão/token stale do browser para evitar o erro
+  // "Invalid Refresh Token" que causa Runtime Error [object Event]
+  useEffect(() => {
+    createClient().auth.signOut({ scope: 'local' }).catch(() => {})
+  }, [])
 
   return (
     <div
