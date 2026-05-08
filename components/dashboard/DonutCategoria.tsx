@@ -107,8 +107,8 @@ export function DonutCategoria({ data }: Props) {
           dataKey="value"
           cx="50%"
           cy="46%"
-          innerRadius={40}
-          outerRadius={92}
+          innerRadius={52}
+          outerRadius={86}
           paddingAngle={1}
           labelLine={false}
           label={renderLabel}
