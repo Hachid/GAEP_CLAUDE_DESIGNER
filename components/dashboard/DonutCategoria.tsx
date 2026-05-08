@@ -63,7 +63,7 @@ function makeLabelRenderer(prefix: string) {
             dominantBaseline: 'auto',
           }}
         >
-          <textPath href={`#${pathId}`} startOffset="50%" textAnchor="middle">
+          <textPath href={`#${pathId}`} startOffset="50%" textAnchor="middle" dy="0.38em">
             {pct}%
           </textPath>
         </text>
