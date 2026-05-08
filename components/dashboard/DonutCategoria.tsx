@@ -100,21 +100,21 @@ export function DonutCategoria({ data }: Props) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={240}>
+    <ResponsiveContainer width="100%" height={260}>
       <PieChart>
         <Pie
           data={chartData}
           dataKey="value"
           cx="50%"
-          cy="42%"
-          innerRadius="58%"
-          outerRadius="78%"
-          paddingAngle={3}
+          cy="46%"
+          innerRadius={52}
+          outerRadius={86}
+          paddingAngle={1}
           labelLine={false}
           label={renderLabel}
         >
           {chartData.map((entry, i) => (
-            <Cell key={i} fill={entry.color} stroke="#fff" strokeWidth={3} />
+            <Cell key={i} fill={entry.color} stroke="none" />
           ))}
         </Pie>
         <Tooltip
