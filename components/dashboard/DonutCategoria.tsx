@@ -16,18 +16,23 @@ const MIN_PCT = 0.06
 const HALF_SPAN = 0.34
 
 interface LabelProps {
-  cx: number
-  cy: number
-  midAngle: number
-  innerRadius: number
-  outerRadius: number
-  percent: number
-  index: number
+  cx?: number
+  cy?: number
+  midAngle?: number
+  innerRadius?: number
+  outerRadius?: number
+  percent?: number
+  index?: number
 }
 
 function makeLabelRenderer(prefix: string) {
   return function CurvedLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }: LabelProps) {
-    if (percent < MIN_PCT) return null
+    if (
+      cx == null || cy == null || midAngle == null ||
+      innerRadius == null || outerRadius == null ||
+      percent == null || index == null ||
+      percent < MIN_PCT
+    ) return null
 
     const pct = Math.round(percent * 100)
     // Raio no centro da banda do arco
