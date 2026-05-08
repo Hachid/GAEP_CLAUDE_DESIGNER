@@ -55,7 +55,7 @@ function makeLabelRenderer(prefix: string) {
           <path id={pathId} d={pathD} fill="none" />
         </defs>
         <text
-          fill="#999999"
+          fill="#1e293b"
           style={{
             fontSize: '15px',
             fontWeight: 800,
