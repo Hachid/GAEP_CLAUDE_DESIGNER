@@ -247,20 +247,20 @@ export default async function RelatorioPage() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '12px 16px',
-              background: '#fff',
-              border: '1.5px solid #e2e8f0',
+              padding: '13px 18px',
+              background: '#1a237e',
+              border: 'none',
               borderRadius: 12,
-              color: '#1a237e',
+              color: '#fff',
               textDecoration: 'none',
               fontWeight: 700,
               fontSize: '0.9rem',
               marginBottom: 20,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+              boxShadow: '0 4px 12px rgba(26,35,126,0.25)',
             }}
           >
             <span>📋 Histórico de Relatórios</span>
-            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>→</span>
+            <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.75)' }}>→</span>
           </Link>
 
           <RelatorioForm
