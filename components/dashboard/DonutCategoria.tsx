@@ -57,7 +57,7 @@ function makeLabelRenderer(prefix: string) {
         <text
           fill="#999999"
           style={{
-            fontSize: '13px',
+            fontSize: '15px',
             fontWeight: 800,
             letterSpacing: '0.04em',
             dominantBaseline: 'auto',
