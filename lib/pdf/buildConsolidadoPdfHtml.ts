@@ -241,24 +241,15 @@ export function buildConsolidadoPdfHtml(m: ConsolidadoPdfModel): string {
       </div>
     </div>`
 
-  const saldo = m.kpi.saldoMinutos
   const kpiCardsHtml = `
-    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6pt;margin:0 0 10pt 0;break-inside:avoid;page-break-inside:avoid;">
-      <div style="background:#f8fafc;border-radius:5pt;padding:6pt 8pt;">
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6pt;margin:0 0 10pt 0;break-inside:avoid;page-break-inside:avoid;">
+      <div style="background:transparent;border-radius:5pt;padding:6pt 8pt;">
         <div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#94a3b8;margin-bottom:3pt;">Horas trabalhadas</div>
         <div style="font-size:14pt;font-weight:800;color:#1a237e;line-height:1;">${escapeHtml(formatMinutos(m.kpi.totalMinutos))}</div>
       </div>
-      <div style="background:#f8fafc;border-radius:5pt;padding:6pt 8pt;">
+      <div style="background:transparent;border-radius:5pt;padding:6pt 8pt;">
         <div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#94a3b8;margin-bottom:3pt;">Registros</div>
         <div style="font-size:14pt;font-weight:800;color:#1a237e;line-height:1;">${String(m.kpi.totalRegistros)}</div>
-      </div>
-      <div style="background:#f8fafc;border-radius:5pt;padding:6pt 8pt;">
-        <div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#94a3b8;margin-bottom:3pt;">Carga prevista</div>
-        <div style="font-size:14pt;font-weight:800;color:#475569;line-height:1;">${escapeHtml(m.kpi.cargaHorariaPrevistaMinutos != null ? formatMinutos(m.kpi.cargaHorariaPrevistaMinutos) : '—')}</div>
-      </div>
-      <div style="background:#f8fafc;border-radius:5pt;padding:6pt 8pt;">
-        <div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#94a3b8;margin-bottom:3pt;">Saldo</div>
-        <div style="font-size:14pt;font-weight:800;color:${saldo != null ? (saldo >= 0 ? '#16a34a' : '#dc2626') : '#475569'};line-height:1;">${escapeHtml(saldo != null ? `${saldo >= 0 ? '+' : ''}${formatMinutos(Math.abs(saldo))}` : '—')}</div>
       </div>
     </div>`
 
@@ -277,8 +268,8 @@ export function buildConsolidadoPdfHtml(m: ConsolidadoPdfModel): string {
               : ''
             return `<div class="descricao-item">
           <div class="descricao-meta">${escapeHtml(fmtDataBr(r.data))} · ${escapeHtml(cat)} · ${escapeHtml(atv)}</div>
-          <p class="descricao-texto corpo-descricao-atividade" style="${stDesc}">
-            <span class="descricao-corpo-pre">${escapeHtml(r.descricao_revisada)}</span><span class="relatorista-inline"> Relatorista: ${escapeHtml(relNome)}</span>
+          <p class="descricao-texto corpo-descricao-atividade" style="${stDesc};text-align:justify;text-indent:1.5em;">
+            <span class="descricao-corpo-pre">${escapeHtml((r.descricao_revisada ?? '').trim())}</span><span class="relatorista-inline"> Relatorista: ${escapeHtml(relNome)}</span>
           </p>
           ${ocorrBlock}
         </div>`

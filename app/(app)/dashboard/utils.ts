@@ -29,4 +29,4 @@ export const CAT_COLORS: Record<string, string> = {
   INSTRUIR: '#16a34a',
 }
 
-export const CAT_ORDER = ['OPERAR', 'TREINAR', 'INSTRUIR'] as const
+export const CAT_ORDER = ['TREINAR', 'OPERAR', 'INSTRUIR'] as const

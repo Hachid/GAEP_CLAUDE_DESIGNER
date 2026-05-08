@@ -1,7 +1,7 @@
 import type { KPIData } from '@/app/(app)/dashboard/types'
 import { formatMinutos } from '@/app/(app)/dashboard/utils'
 
-const CAT_ORDER = ['OPERAR', 'TREINAR', 'INSTRUIR'] as const
+const CAT_ORDER = ['TREINAR', 'OPERAR', 'INSTRUIR'] as const
 const CAT_COLORS: Record<string, string> = {
   OPERAR: '#1a237e',
   TREINAR: '#f97316',

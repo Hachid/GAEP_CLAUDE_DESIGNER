@@ -93,10 +93,10 @@ export async function GET(req: Request) {
 
   const { data: alvo, error: alvoErr } = await admin
     .from('operadores')
-    .select('id, nome_guerra:nome, gaep_id')
+    .select('id, nome_guerra:nome, nome_completo, matricula, gaep_id')
     .eq('id', operadorId)
     .is('deleted_at', null)
-    .maybeSingle<{ id: string; nome_guerra: string; gaep_id: string }>()
+    .maybeSingle<{ id: string; nome_guerra: string; nome_completo: string | null; matricula: string | null; gaep_id: string }>()
 
   if (alvoErr || !alvo) {
     return NextResponse.json({ error: 'Operador alvo não encontrado.' }, { status: 404 })
@@ -120,6 +120,8 @@ export async function GET(req: Request) {
 
   const html = buildDesempenhoOperadorPdfHtml({
     operadorNome: nomeOperador,
+    operadorNomeCompleto: alvo.nome_completo,
+    operadorMatricula: alvo.matricula,
     gaepCodigo: gaepCodigoStr,
     dataInicio,
     dataFim,

@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSessionOrThrow } from '@/lib/auth'
 import { revalidatePath, revalidateTag } from 'next/cache'
+import { logAudit } from '@/lib/audit'
 
 type ActionResult = { error?: string }
 type CsvRow = Record<string, string>
@@ -131,7 +132,7 @@ export async function criarOperador(input: {
   }
 
   try {
-    const { admin } = await getAdminCtx()
+    const { admin, operadorId: adminId, gaepId: adminGaepId } = await getAdminCtx()
 
     const senha = input.senha.trim() || '1234'
     const { data: authData, error: authErr } = await admin.auth.admin.createUser({
@@ -244,6 +245,7 @@ export async function criarOperador(input: {
     }
     if (!data?.id) return { error: 'Não foi possível criar o operador.' }
     revalidatePath('/gestao')
+    logAudit({ gaepId: input.gaepId, operadorId: adminId, acao: 'CREATE', tabela: 'operadores', registroId: String(data.id), dadosDepois: { nome: input.nome, matricula: input.matricula, perfil: input.perfil } }).catch(() => {})
     return { id: String(data.id) }
   } catch (e) {
     return { error: (e as Error).message }
@@ -275,7 +277,7 @@ export async function editarOperador(
   }
 
   try {
-    const { admin } = await getAdminCtx()
+    const { admin, operadorId: adminId, gaepId } = await getAdminCtx()
     const pediuCamposComplementares = hasCamposComplementares(updates)
     let { error } = await admin
       .from('operadores')
@@ -358,6 +360,7 @@ export async function editarOperador(
       }
     }
     revalidatePath('/gestao')
+    logAudit({ gaepId, operadorId: adminId, acao: 'UPDATE', tabela: 'operadores', registroId: id, dadosDepois: { nome: updates.nome, perfil: updates.perfil } }).catch(() => {})
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -366,10 +369,11 @@ export async function editarOperador(
 
 export async function toggleAtivoOperador(id: string, ativo: boolean): Promise<ActionResult> {
   try {
-    const { admin } = await getAdminCtx()
+    const { admin, operadorId: adminId, gaepId } = await getAdminCtx()
     const { error } = await admin.from('operadores').update({ ativo }).eq('id', id)
     if (error) return { error: error.message }
     revalidatePath('/gestao')
+    logAudit({ gaepId, operadorId: adminId, acao: 'UPDATE', tabela: 'operadores', registroId: id, dadosDepois: { ativo } }).catch(() => {})
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -382,7 +386,8 @@ export async function adicionarAtividade(
   nome: string
 ): Promise<{ id?: string; error?: string }> {
   try {
-    const { admin } = await getAdminCtx()
+    const ctx = await getAdminCtx()
+    const { admin } = ctx
     const nomeLimpo = nome.trim()
     if (!nomeLimpo) return { error: 'Informe um nome válido para a atividade.' }
 
@@ -403,6 +408,7 @@ export async function adicionarAtividade(
     if (error) return { error: error.message }
     revalidatePath('/gestao')
     revalidateTag('atividades-lookup')
+    logAudit({ gaepId: ctx.gaepId, operadorId: ctx.operadorId, acao: 'CREATE', tabela: 'atividades', registroId: String(data.id), dadosDepois: { nome: nomeLimpo } }).catch(() => {})
     return { id: String(data.id) }
   } catch (e) {
     return { error: (e as Error).message }
@@ -414,7 +420,7 @@ export async function editarAtividade(
   nome: string
 ): Promise<ActionResult> {
   try {
-    const { admin } = await getAdminCtx()
+    const { admin, operadorId, gaepId } = await getAdminCtx()
     const nomeLimpo = nome.trim()
     if (!nomeLimpo) return { error: 'Informe um nome válido para a atividade.' }
 
@@ -436,6 +442,7 @@ export async function editarAtividade(
     if (error) return { error: error.message }
     revalidatePath('/gestao')
     revalidateTag('atividades-lookup')
+    logAudit({ gaepId, operadorId, acao: 'UPDATE', tabela: 'atividades', registroId: id, dadosDepois: { nome: nomeLimpo } }).catch(() => {})
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -444,7 +451,7 @@ export async function editarAtividade(
 
 export async function removerAtividade(id: string): Promise<ActionResult> {
   try {
-    const { admin } = await getAdminCtx()
+    const { admin, operadorId, gaepId } = await getAdminCtx()
     const { error } = await admin
       .from('atividades')
       .update({ deleted_at: new Date().toISOString(), ativo: false })
@@ -452,6 +459,7 @@ export async function removerAtividade(id: string): Promise<ActionResult> {
     if (error) return { error: error.message }
     revalidatePath('/gestao')
     revalidateTag('atividades-lookup')
+    logAudit({ gaepId, operadorId, acao: 'DELETE', tabela: 'atividades', registroId: id }).catch(() => {})
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -533,13 +541,14 @@ export async function salvarConfigIA(
   operadorId: string
 ): Promise<ActionResult> {
   try {
-    const { admin } = await getAdminCtx()
+    const { admin, operadorId: adminId, gaepId: adminGaepId } = await getAdminCtx()
     const { error } = await admin.from('config_ia').upsert(
       { gaep_id: gaepId, modelo, temperatura, prompt, updated_at: new Date().toISOString(), updated_by: operadorId },
       { onConflict: 'gaep_id' }
     )
     if (error) return { error: error.message }
     revalidatePath('/gestao')
+    logAudit({ gaepId: adminGaepId, operadorId: adminId, acao: 'UPDATE', tabela: 'config_ia', dadosDepois: { modelo, temperatura } }).catch(() => {})
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -552,7 +561,7 @@ export async function salvarConfigRelatorio(
   config: ConfigRelatorioData
 ): Promise<ActionResult> {
   try {
-    const { admin } = await getAdminCtx()
+    const { admin, operadorId: adminId, gaepId: adminGaepId } = await getAdminCtx()
     let { error } = await admin.from('config_relatorio').upsert(
       {
         gaep_id: gaepId,
@@ -594,6 +603,7 @@ export async function salvarConfigRelatorio(
     if (error) return { error: error.message }
     revalidatePath('/gestao')
     revalidatePath('/relatorio')
+    logAudit({ gaepId: adminGaepId, operadorId: adminId, acao: 'UPDATE', tabela: 'config_relatorio', dadosDepois: { tituloTexto: config.tituloTexto } }).catch(() => {})
     return {}
   } catch (e) {
     return { error: (e as Error).message }
@@ -786,8 +796,9 @@ export async function adicionarGaep(input: {
   estado: string
 }): Promise<{ id?: string; error?: string }> {
   try {
-    const { admin, perfil } = await getAdminCtx()
-    if (perfil !== 'SUPER_ADMIN') return { error: 'Acesso restrito ao Super Admin.' }
+    const ctx = await getAdminCtx()
+    if (ctx.perfil !== 'SUPER_ADMIN') return { error: 'Acesso restrito ao Super Admin.' }
+    const { admin } = ctx
 
     const { data, error } = await admin
       .from('gaeps')
@@ -796,6 +807,7 @@ export async function adicionarGaep(input: {
       .single()
     if (error) return { error: error.message }
     revalidatePath('/gestao')
+    logAudit({ gaepId: null, operadorId: ctx.operadorId, acao: 'CREATE', tabela: 'gaeps', registroId: String(data.id), dadosDepois: { codigo: input.codigo, cidade: input.cidade, estado: input.estado } }).catch(() => {})
     return { id: String(data.id) }
   } catch (e) {
     return { error: (e as Error).message }
@@ -809,6 +821,47 @@ export async function toggleAtivoGaep(id: string, ativo: boolean): Promise<Actio
     const { error } = await admin.from('gaeps').update({ ativo }).eq('id', id)
     if (error) return { error: error.message }
     revalidatePath('/gestao')
+    return {}
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+export async function editarGaep(
+  id: string,
+  input: { codigo: string; cidade: string; estado: string }
+): Promise<ActionResult> {
+  try {
+    const { admin, perfil, operadorId, gaepId } = await getAdminCtx()
+    if (perfil !== 'SUPER_ADMIN') return { error: 'Acesso restrito ao Super Admin.' }
+    const { error } = await admin
+      .from('gaeps')
+      .update({
+        codigo: input.codigo.trim(),
+        cidade: input.cidade.trim(),
+        estado: input.estado.trim().toUpperCase(),
+      })
+      .eq('id', id)
+    if (error) return { error: error.message }
+    revalidatePath('/gestao')
+    logAudit({ gaepId, operadorId, acao: 'UPDATE', tabela: 'gaeps', registroId: id, dadosDepois: { codigo: input.codigo, cidade: input.cidade, estado: input.estado } }).catch(() => {})
+    return {}
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+export async function excluirGaep(id: string): Promise<ActionResult> {
+  try {
+    const { admin, perfil, operadorId, gaepId } = await getAdminCtx()
+    if (perfil !== 'SUPER_ADMIN') return { error: 'Acesso restrito ao Super Admin.' }
+    const { error } = await admin
+      .from('gaeps')
+      .update({ deleted_at: new Date().toISOString(), ativo: false })
+      .eq('id', id)
+    if (error) return { error: error.message }
+    revalidatePath('/gestao')
+    logAudit({ gaepId, operadorId, acao: 'DELETE', tabela: 'gaeps', registroId: id }).catch(() => {})
     return {}
   } catch (e) {
     return { error: (e as Error).message }

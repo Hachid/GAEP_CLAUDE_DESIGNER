@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { GestaoClient } from './GestaoClient'
 import { SidebarNav } from '@/components/layout/SidebarNav'
+import { logAudit } from '@/lib/audit'
 import { getCategorias, getAtividades } from '@/lib/cache/queries'
 import type {
   GestaoData,
@@ -20,7 +21,11 @@ import {
 } from '@/lib/pdf/defaultTituloRelatorio'
 import { DEFAULT_PRINT_MARGINS_MM } from '@/lib/pdf/relatorioIntegrity'
 
-export default async function GestaoPage() {
+export default async function GestaoPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string }> | { tab?: string }
+}) {
   // ── 1. Auth ───────────────────────────────────────────────────
   const supabase = await createClient()
   const {
@@ -289,7 +294,17 @@ export default async function GestaoPage() {
     gaeps: (gaepsRes.data ?? []) as GaepRow[],
   }
 
-  // ── 5. Render ─────────────────────────────────────────────────
+  // ── 5. Log de acesso (fire-and-forget) ───────────────────────
+  const resolvedParams = searchParams instanceof Promise ? await searchParams : (searchParams ?? {})
+  logAudit({
+    gaepId: gaep.id,
+    operadorId: operador.id,
+    acao: 'ACESSO',
+    tabela: 'gestao',
+    dadosDepois: { tab: resolvedParams.tab ?? 'efetivo', perfil },
+  }).catch(() => {})
+
+  // ── 6. Render ─────────────────────────────────────────────────
   return (
     <>
       <SidebarNav nome={operador.nome} gaepCodigo={gaep.codigo} perfil={perfil} />

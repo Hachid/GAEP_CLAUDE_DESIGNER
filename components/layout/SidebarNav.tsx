@@ -36,7 +36,12 @@ export function SidebarNav({ nome, gaepCodigo, perfil }: SidebarNavProps) {
     { href: '/gestao?tab=relatorio', icon: '📄', label: 'Relatório', tab: 'relatorio' },
     { href: '/gestao?tab=diarias', icon: '💰', label: 'Diárias', tab: 'diarias' },
     { href: '/gestao?tab=importacao', icon: '📥', label: 'Importar', tab: 'importacao' },
-    ...(isSuperAdmin ? [{ href: '/gestao?tab=gaeps', icon: '🌐', label: 'GAEPs', tab: 'gaeps' }] : []),
+    ...(isSuperAdmin
+      ? [
+          { href: '/gestao?tab=gaeps', icon: '🌐', label: 'GAEPs', tab: 'gaeps' },
+          { href: '/gestao?tab=logs', icon: '📋', label: 'Logs', tab: 'logs' },
+        ]
+      : []),
   ] as const
 
   return (

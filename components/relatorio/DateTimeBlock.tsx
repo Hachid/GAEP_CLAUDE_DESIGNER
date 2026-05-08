@@ -139,7 +139,7 @@ export function DateTimeBlock({
         touchAction: 'manipulation',
       }}>
         <span style={{ fontSize: '0.85rem', fontWeight: 700, color: plantao ? '#7c3aed' : '#64748b' }}>
-          🌙 Plantão (turno multi-dia)
+          🌙 Plantão
         </span>
         <input
           type="checkbox"

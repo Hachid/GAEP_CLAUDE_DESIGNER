@@ -20,9 +20,12 @@ import {
   testarPromptIA,
   editarDiaria,
   adicionarGaep,
+  editarGaep,
+  excluirGaep,
   toggleAtivoGaep,
   importarRelatoriosCsv,
 } from './actions'
+import { LogsTab } from './LogsTab'
 import { DEFAULT_TITULO_RELATORIO_INSTITUCIONAL } from '@/lib/pdf/defaultTituloRelatorio'
 
 // ── Tipos públicos ────────────────────────────────────────────
@@ -2362,6 +2365,9 @@ function TabGAEPs({ initial }: { initial: GaepRow[] }) {
   const [gaeps, setGaeps] = useState<GaepRow[]>(initial)
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState({ codigo: '', cidade: '', estado: '' })
+  const [editTarget, setEditTarget] = useState<GaepRow | null>(null)
+  const [editForm, setEditForm] = useState({ codigo: '', cidade: '', estado: '' })
+  const [deleteTarget, setDeleteTarget] = useState<GaepRow | null>(null)
   const [toast, setToast] = useState('')
   const [pending, startTransition] = useTransition()
 
@@ -2387,8 +2393,42 @@ function TabGAEPs({ initial }: { initial: GaepRow[] }) {
       const res = await toggleAtivoGaep(g.id, !g.ativo)
       if (res.error) { showToast(`❌ ${res.error}`); return }
       setGaeps((prev) => prev.map((x) => x.id === g.id ? { ...x, ativo: !x.ativo } : x))
-      showToast(`✅ ${g.codigo} ${g.ativo ? 'desativado' : 'ativado'}.`)
+      showToast(`✅ ${g.codigo} ${g.ativo ? 'desativada' : 'ativada'}.`)
     })
+  }
+
+  function abrirEditar(g: GaepRow) {
+    setEditForm({ codigo: g.codigo, cidade: g.cidade, estado: g.estado })
+    setEditTarget(g)
+  }
+
+  function salvarEdicao() {
+    if (!editTarget || !editForm.codigo.trim() || !editForm.cidade.trim() || !editForm.estado.trim()) return
+    startTransition(async () => {
+      const res = await editarGaep(editTarget.id, editForm)
+      if (res.error) { showToast(`❌ ${res.error}`); return }
+      const updated = { ...editForm, estado: editForm.estado.toUpperCase() }
+      setGaeps((prev) => prev.map((x) => x.id === editTarget.id ? { ...x, ...updated } : x))
+      showToast(`✅ ${updated.codigo} atualizada!`)
+      setEditTarget(null)
+    })
+  }
+
+  function confirmarExclusao() {
+    if (!deleteTarget) return
+    startTransition(async () => {
+      const res = await excluirGaep(deleteTarget.id)
+      if (res.error) { showToast(`❌ ${res.error}`); return }
+      setGaeps((prev) => prev.filter((x) => x.id !== deleteTarget.id))
+      showToast(`✅ ${deleteTarget.codigo} excluída.`)
+      setDeleteTarget(null)
+    })
+  }
+
+  const btnBase: React.CSSProperties = {
+    padding: '6px 10px', borderRadius: 7, fontWeight: 700, fontSize: '0.72rem',
+    cursor: pending ? 'not-allowed' : 'pointer', border: '1px solid transparent',
+    fontFamily: 'inherit', lineHeight: 1,
   }
 
   return (
@@ -2416,33 +2456,25 @@ function TabGAEPs({ initial }: { initial: GaepRow[] }) {
         {gaeps.map((g) => (
           <div
             key={g.id}
-            style={{ padding: '13px 16px', borderBottom: '1px solid #f8fafc', display: 'flex', alignItems: 'center', gap: 10 }}
+            style={{ padding: '12px 16px', borderBottom: '1px solid #f8fafc', display: 'flex', alignItems: 'center', gap: 10 }}
           >
             <div
               style={{
-                width: 44,
-                height: 44,
-                borderRadius: 10,
+                width: 40, height: 40, borderRadius: 10,
                 background: g.ativo ? 'rgba(26,35,126,0.08)' : '#f1f5f9',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               }}
             >
-              <span style={{ fontSize: '1.1rem' }}>🏛️</span>
+              <span style={{ fontSize: '1rem' }}>🏛️</span>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                <span style={{ fontWeight: 800, fontSize: '0.92rem', color: g.ativo ? '#1a237e' : '#94a3b8' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 2, flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 800, fontSize: '0.9rem', color: g.ativo ? '#1a237e' : '#94a3b8' }}>
                   {g.codigo}
                 </span>
                 <span
                   style={{
-                    fontSize: '0.68rem',
-                    padding: '1px 7px',
-                    borderRadius: 20,
-                    fontWeight: 700,
+                    fontSize: '0.65rem', padding: '1px 6px', borderRadius: 20, fontWeight: 700,
                     background: g.ativo ? 'rgba(22,163,74,0.1)' : 'rgba(148,163,184,0.15)',
                     color: g.ativo ? '#16a34a' : '#94a3b8',
                     border: `1px solid ${g.ativo ? 'rgba(22,163,74,0.3)' : '#e2e8f0'}`,
@@ -2451,13 +2483,42 @@ function TabGAEPs({ initial }: { initial: GaepRow[] }) {
                   {g.ativo ? 'ATIVA' : 'INATIVA'}
                 </span>
               </div>
-              <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                {g.cidade}/{g.estado}
+              <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                {g.cidade} / {g.estado}
               </div>
             </div>
-            <ActionBtn onClick={() => handleToggle(g)} color={g.ativo ? '#ef4444' : '#16a34a'} disabled={pending}>
-              {g.ativo ? '🔒 Desativar' : '✅ Ativar'}
-            </ActionBtn>
+            {/* Ações */}
+            <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+              <button
+                onClick={() => abrirEditar(g)}
+                disabled={pending}
+                style={{ ...btnBase, background: 'rgba(26,35,126,0.07)', color: '#1a237e', border: '1px solid rgba(26,35,126,0.2)' }}
+                title="Editar unidade"
+              >
+                ✏️
+              </button>
+              <button
+                onClick={() => setDeleteTarget(g)}
+                disabled={pending}
+                style={{ ...btnBase, background: 'rgba(239,68,68,0.07)', color: '#dc2626', border: '1px solid rgba(239,68,68,0.2)' }}
+                title="Excluir unidade"
+              >
+                🗑️
+              </button>
+              <button
+                onClick={() => handleToggle(g)}
+                disabled={pending}
+                style={{
+                  ...btnBase,
+                  background: g.ativo ? 'rgba(239,68,68,0.07)' : 'rgba(22,163,74,0.07)',
+                  color: g.ativo ? '#dc2626' : '#16a34a',
+                  border: `1px solid ${g.ativo ? 'rgba(239,68,68,0.2)' : 'rgba(22,163,74,0.2)'}`,
+                }}
+                title={g.ativo ? 'Desativar' : 'Ativar'}
+              >
+                {g.ativo ? '🔒' : '✅'}
+              </button>
+            </div>
           </div>
         ))}
         {gaeps.length === 0 && (
@@ -2467,6 +2528,7 @@ function TabGAEPs({ initial }: { initial: GaepRow[] }) {
         )}
       </AdminCard>
 
+      {/* Modal: Nova Unidade */}
       {modal && (
         <Modal title="Nova Unidade GAEP" onClose={() => setModal(false)}>
           <FormField label="Código da Unidade">
@@ -2501,19 +2563,111 @@ function TabGAEPs({ initial }: { initial: GaepRow[] }) {
             onClick={adicionar}
             disabled={pending || !form.codigo.trim() || !form.cidade.trim() || !form.estado.trim()}
             style={{
-              width: '100%',
-              padding: 14,
-              background: pending ? '#94a3b8' : '#7c3aed',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 10,
-              fontWeight: 700,
-              cursor: pending ? 'not-allowed' : 'pointer',
-              marginTop: 8,
+              width: '100%', padding: 14, background: pending ? '#94a3b8' : '#7c3aed',
+              color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700,
+              cursor: pending ? 'not-allowed' : 'pointer', marginTop: 8, fontFamily: 'inherit',
             }}
           >
             {pending ? '⏳ Cadastrando...' : 'Cadastrar Unidade'}
           </button>
+        </Modal>
+      )}
+
+      {/* Modal: Editar Unidade */}
+      {editTarget && (
+        <Modal title={`Editar ${editTarget.codigo}`} onClose={() => setEditTarget(null)}>
+          <FormField label="Código da Unidade">
+            <input
+              value={editForm.codigo}
+              onChange={(e) => setEditForm((f) => ({ ...f, codigo: e.target.value }))}
+              style={mInput}
+              placeholder="Ex: GAEP-XXX"
+              autoFocus
+            />
+          </FormField>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10 }}>
+            <FormField label="Cidade">
+              <input
+                value={editForm.cidade}
+                onChange={(e) => setEditForm((f) => ({ ...f, cidade: e.target.value }))}
+                style={mInput}
+                placeholder="Cidade"
+              />
+            </FormField>
+            <FormField label="Estado">
+              <input
+                value={editForm.estado}
+                onChange={(e) => setEditForm((f) => ({ ...f, estado: e.target.value }))}
+                style={mInput}
+                placeholder="UF"
+                maxLength={2}
+              />
+            </FormField>
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+            <button
+              onClick={() => setEditTarget(null)}
+              style={{
+                flex: 1, padding: 13, background: 'transparent', color: '#64748b',
+                border: '1px solid #e2e8f0', borderRadius: 10, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={salvarEdicao}
+              disabled={pending || !editForm.codigo.trim() || !editForm.cidade.trim() || !editForm.estado.trim()}
+              style={{
+                flex: 2, padding: 13, background: pending ? '#94a3b8' : '#1a237e',
+                color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700,
+                cursor: pending ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              {pending ? '⏳ Salvando...' : '💾 Salvar Alterações'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: Confirmar Exclusão */}
+      {deleteTarget && (
+        <Modal title="Confirmar Exclusão" onClose={() => setDeleteTarget(null)}>
+          <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontWeight: 800, fontSize: '1rem', color: '#1e293b', marginBottom: 8 }}>
+              Excluir <span style={{ color: '#dc2626' }}>{deleteTarget.codigo}</span>?
+            </div>
+            <div style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: 1.5 }}>
+              Esta operação usa soft delete — a unidade será marcada como excluída mas os dados históricos são preservados.
+            </div>
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 6 }}>
+              {deleteTarget.cidade} / {deleteTarget.estado}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={() => setDeleteTarget(null)}
+              style={{
+                flex: 1, padding: 13, background: 'transparent', color: '#64748b',
+                border: '1px solid #e2e8f0', borderRadius: 10, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={confirmarExclusao}
+              disabled={pending}
+              style={{
+                flex: 1, padding: 13, background: pending ? '#94a3b8' : '#dc2626',
+                color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700,
+                cursor: pending ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              {pending ? '⏳...' : '🗑️ Excluir'}
+            </button>
+          </div>
         </Modal>
       )}
     </div>
@@ -2780,7 +2934,10 @@ export function GestaoClient({ data }: { data: GestaoData }) {
       comp: <TabImportacaoRelatorios />,
     },
     ...(isSuperAdmin
-      ? [{ id: 'gaeps', label: 'GAEPs', comp: <TabGAEPs initial={data.gaeps} /> }]
+      ? [
+          { id: 'gaeps', label: 'GAEPs', comp: <TabGAEPs initial={data.gaeps} /> },
+          { id: 'logs', label: 'Logs', comp: <LogsTab /> },
+        ]
       : []),
   ]
 

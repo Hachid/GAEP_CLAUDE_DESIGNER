@@ -83,17 +83,20 @@ function barRowsForGroup(items: AtividadeStat[]): string {
 }
 
 function buildCompositionAndRankingHtml(kpi: KPIData): string {
+  const totalCatMin = kpi.porCategoria.reduce((acc, c) => acc + c.totalMinutos, 0)
   const maxCat = Math.max(1, ...kpi.porCategoria.map((c) => c.totalMinutos))
   const donutRows = kpi.porCategoria
     .map((c) => {
-      const pct = Math.round((c.totalMinutos / maxCat) * 100)
+      const pctBar = Math.round((c.totalMinutos / maxCat) * 100)
+      const pctTotal = totalCatMin > 0 ? Math.round((c.totalMinutos / totalCatMin) * 100) : 0
       const color = CAT_COLORS[c.nome] ?? '#64748b'
       return `<tr>
         <td style="padding:4pt 6pt;border-bottom:0.5pt solid #e2e8f0;font-weight:700;font-size:8.5pt;">${escapeHtml(c.nome)}</td>
         <td style="padding:4pt 6pt;border-bottom:0.5pt solid #e2e8f0;font-size:8.5pt;text-align:right;">${escapeHtml(formatMinutos(c.totalMinutos))}</td>
-        <td style="padding:4pt 6pt;border-bottom:0.5pt solid #e2e8f0;width:38%;">
+        <td style="padding:4pt 6pt;border-bottom:0.5pt solid #e2e8f0;font-size:8.5pt;font-weight:700;text-align:right;color:${color};">${pctTotal}%</td>
+        <td style="padding:4pt 6pt;border-bottom:0.5pt solid #e2e8f0;width:32%;">
           <div style="height:7pt;background:#e2e8f0;border-radius:2pt;overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${color};"></div>
+            <div style="height:100%;width:${pctBar}%;background:${color};"></div>
           </div>
         </td>
       </tr>`
@@ -123,6 +126,7 @@ function buildCompositionAndRankingHtml(kpi: KPIData): string {
           <thead><tr>
             <th style="text-align:left;font-size:7pt;color:#64748b;padding:2pt 6pt;">Categoria</th>
             <th style="text-align:right;font-size:7pt;color:#64748b;padding:2pt 6pt;">Total</th>
+            <th style="text-align:right;font-size:7pt;color:#64748b;padding:2pt 6pt;">%</th>
             <th style="font-size:7pt;color:#64748b;padding:2pt 6pt;">Proporção</th>
           </tr></thead>
           <tbody>${donutRows}</tbody>
@@ -199,6 +203,8 @@ function buildFolhaTableHtml(folha: FolhaDia[], totalMinutos: number): string {
 
 export type DesempenhoOperadorPdfModel = {
   operadorNome: string
+  operadorNomeCompleto: string | null
+  operadorMatricula: string | null
   gaepCodigo: string
   dataInicio: string
   dataFim: string
@@ -253,7 +259,8 @@ export function buildDesempenhoOperadorPdfHtml(m: DesempenhoOperadorPdfModel): s
 <body>
   <h1>Desempenho individual</h1>
   <div class="meta">
-    <strong>Operador:</strong> ${escapeHtml(m.operadorNome)}<br/>
+    <strong>Nome completo:</strong> ${escapeHtml(m.operadorNomeCompleto?.trim() || m.operadorNome)}<br/>
+    <strong>Matrícula:</strong> ${escapeHtml(m.operadorMatricula?.trim() || '—')}<br/>
     <strong>GAEP:</strong> ${escapeHtml(m.gaepCodigo)}<br/>
     <strong>Período:</strong> ${escapeHtml(periodoFmt)}
   </div>
