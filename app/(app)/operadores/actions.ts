@@ -1,7 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { minutesBetween } from '@/app/(app)/dashboard/utils'
+import { minutesBetween, rankingAtividadeKey } from '@/app/(app)/dashboard/utils'
 import type { KPIData, CategoriaStat, AtividadeStat } from '@/app/(app)/dashboard/types'
 import type { DesempenhoFiltros, DesempenhoData, FolhaDia, FolhaRow } from './types'
 
@@ -12,8 +12,13 @@ type RelRow = {
   plantao: boolean | null
   hora_inicio: string | null
   hora_fim: string | null
-  atividades: { id: string; nome: string } | null
-  categorias_atividade: { id: string; nome: string } | null
+  atividades: { id: string; nome: string } | { id: string; nome: string }[] | null
+  categorias_atividade: { id: string; nome: string } | { id: string; nome: string }[] | null
+}
+
+function pickFirst<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null
+  return Array.isArray(value) ? (value[0] ?? null) : value
 }
 
 async function fetchRelatoriosOperador(
@@ -79,13 +84,13 @@ export async function fetchDesempenhoData(
     let totalMinutos = 0
 
     for (const r of rows) {
-      if (!r.atividades || !r.categorias_atividade || !r.hora_inicio || !r.hora_fim) continue
+      const at = pickFirst(r.atividades)
+      const cat = pickFirst(r.categorias_atividade)
+      if (!at || !cat || !r.hora_inicio || !r.hora_fim) continue
       const isPlantao = (r.plantao ?? false) && !!r.data_fim && r.data_fim > r.data
       const mins = isPlantao
         ? Math.round((new Date(`${r.data_fim}T${r.hora_fim}`).getTime() - new Date(`${r.data}T${r.hora_inicio}`).getTime()) / 60000)
         : minutesBetween(r.hora_inicio, r.hora_fim)
-      const cat = r.categorias_atividade
-      const at = r.atividades
 
       totalMinutos += mins
 
@@ -98,13 +103,14 @@ export async function fetchDesempenhoData(
         catMap.set(cat.id, { id: cat.id, nome: cat.nome, totalRegistros: 1, totalMinutos: mins })
       }
 
-      const ea = atMap.get(at.id)
+      const rk = rankingAtividadeKey(cat.id, at.id)
+      const ea = atMap.get(rk)
       if (ea) {
         ea.totalRegistros++
         ea.totalMinutos += mins
       } else {
-        atMap.set(at.id, {
-          id: at.id,
+        atMap.set(rk, {
+          id: rk,
           nome: at.nome,
           categoriaId: cat.id,
           categoriaNome: cat.nome,

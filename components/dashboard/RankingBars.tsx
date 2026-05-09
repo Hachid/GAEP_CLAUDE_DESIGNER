@@ -72,9 +72,16 @@ function CategoriaBarChart({
   )
 }
 
-export function RankingBars({ data }: Props) {
-  const categorias = CAT_ORDER.filter((cat) => data.some((d) => d.categoriaNome === cat))
+function rankingTitulo(cat: (typeof CAT_ORDER)[number]): string {
+  return cat.charAt(0) + cat.slice(1).toLowerCase()
+}
 
+/** Mesma chave que `CAT_ORDER` / banco (`INSTRUIR`, etc.), tolerando espaços ou casing. */
+function nomeCategoriaCanonico(nome: string | undefined): string {
+  return (nome ?? '').trim().toUpperCase()
+}
+
+export function RankingBars({ data }: Props) {
   if (data.length === 0) {
     return (
       <div
@@ -94,8 +101,8 @@ export function RankingBars({ data }: Props) {
 
   return (
     <div>
-      {categorias.map((cat, idx) => {
-        const items = data.filter((d) => d.categoriaNome === cat)
+      {CAT_ORDER.map((cat, idx) => {
+        const items = data.filter((d) => nomeCategoriaCanonico(d.categoriaNome) === cat)
         const color = CAT_COLORS[cat] ?? '#94a3b8'
         return (
           <div key={cat} style={{ marginTop: idx > 0 ? 24 : 0 }}>
@@ -110,9 +117,25 @@ export function RankingBars({ data }: Props) {
                 marginBottom: 12,
               }}
             >
-              Ranking: {cat.charAt(0) + cat.slice(1).toLowerCase()}
+              Ranking: {rankingTitulo(cat)}
             </div>
-            <CategoriaBarChart items={items} color={color} />
+            {items.length === 0 ? (
+              <div
+                style={{
+                  minHeight: 72,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#94a3b8',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                }}
+              >
+                Sem atividades nesta categoria no período
+              </div>
+            ) : (
+              <CategoriaBarChart items={items} color={color} />
+            )}
           </div>
         )
       })}

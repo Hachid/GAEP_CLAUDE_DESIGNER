@@ -150,7 +150,7 @@ export function DashboardClient({
 
       <div style={cardStyle}>
         <div style={cardTitleStyle}>Composição por Categoria</div>
-        <DonutCategoria data={kpi.porCategoria} />
+        <DonutCategoria data={kpi.porCategoria} dashboardLayout />
       </div>
 
       <div style={cardStyle}>

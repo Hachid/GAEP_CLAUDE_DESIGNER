@@ -3,7 +3,7 @@
 import { unstable_cache } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getSessionOrThrow } from '@/lib/auth'
-import { minutesBetween, toMesLabel } from './utils'
+import { minutesBetween, rankingAtividadeKey, toMesLabel } from './utils'
 import type {
   KPIData,
   DashboardFiltros,
@@ -80,13 +80,14 @@ async function computeKPI(gaepId: string, filtros: DashboardFiltros): Promise<KP
       catMap.set(cat.id, { id: cat.id, nome: cat.nome, totalRegistros: 1, totalMinutos: mins })
     }
 
-    const ea = atMap.get(at.id)
+    const rk = rankingAtividadeKey(cat.id, at.id)
+    const ea = atMap.get(rk)
     if (ea) {
       ea.totalRegistros++
       ea.totalMinutos += mins
     } else {
-      atMap.set(at.id, {
-        id: at.id,
+      atMap.set(rk, {
+        id: rk,
         nome: at.nome,
         categoriaId: cat.id,
         categoriaNome: cat.nome,

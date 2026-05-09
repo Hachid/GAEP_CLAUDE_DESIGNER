@@ -24,6 +24,13 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => navMock.searchParams,
 }))
 
+vi.mock('@/app/convite/actions', () => ({
+  gerarConviteEfetivo: vi.fn().mockResolvedValue({
+    url: 'https://example.test/convite/token-test',
+    expiresAt: '2099-01-01T00:00:00.000Z',
+  }),
+}))
+
 function renderGestao(node: ReactNode) {
   return render(<VariavelMesProvider>{node}</VariavelMesProvider>)
 }
@@ -165,6 +172,13 @@ describe('GestaoClient', () => {
     await user.type(search, 'daniel')
     expect(screen.queryByText('Carlos Alfa')).not.toBeInTheDocument()
     expect(screen.getByText('Daniel Beta')).toBeInTheDocument()
+  })
+
+  it('TabEfetivo exibe seção Convite ao efetivo', () => {
+    renderGestao(<GestaoClient data={baseData()} />)
+    expect(screen.getByText(/Convite ao efetivo/)).toBeInTheDocument()
+    expect(screen.getByText(/O link é válido por 7 dias/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Link de Convite/i })).toBeInTheDocument()
   })
 
   it('TabEfetivo: botão "+ Novo Operador" abre modal', async () => {

@@ -34,6 +34,7 @@ function hasCamposComplementares(input: {
   numeroCarteirinha?: string
   cpf?: string
   email?: string
+  emailFuncional?: string
 }) {
   return (
     hasValor(input.nomeCompleto) ||
@@ -45,9 +46,19 @@ function hasCamposComplementares(input: {
     hasValor(input.planoSaude) ||
     hasValor(input.numeroCarteirinha) ||
     hasValor(input.cpf) ||
-    hasValor(input.email)
+    hasValor(input.email) ||
+    hasValor(input.emailFuncional)
   )
 }
+
+/** Perfis permitidos pelo CHECK em `operadores.perfil` (Postgres). */
+const PERFIS_OPERADOR_DB = [
+  'OPERADOR',
+  'SUPERVISOR',
+  'ADMIN',
+  'SUPER_ADMIN',
+  'AUDITOR',
+] as const
 
 export interface BlocoEstiloRelatorio {
   fontFamily: string
@@ -125,14 +136,23 @@ export async function criarOperador(input: {
   numeroCarteirinha?: string
   cpf?: string
   email?: string
+  emailFuncional?: string
 }): Promise<{ id?: string; error?: string }> {
-  const PERFIS_VALIDOS = ['OPERADOR', 'ADMIN', 'SUPER_ADMIN'] as const
-  if (!PERFIS_VALIDOS.includes(input.perfil as (typeof PERFIS_VALIDOS)[number])) {
-    return { error: 'Perfil inválido. Use OPERADOR, ADMIN ou SUPER_ADMIN.' }
-  }
-
   try {
-    const { admin, operadorId: adminId } = await getAdminCtx()
+    const { admin, operadorId: adminId, perfil: ctxPerfil } = await getAdminCtx()
+
+    const perfilEfetivo =
+      ctxPerfil === 'SUPER_ADMIN' &&
+      PERFIS_OPERADOR_DB.includes(input.perfil as (typeof PERFIS_OPERADOR_DB)[number])
+        ? input.perfil
+        : 'OPERADOR'
+
+    if (
+      ctxPerfil === 'SUPER_ADMIN' &&
+      !PERFIS_OPERADOR_DB.includes(input.perfil as (typeof PERFIS_OPERADOR_DB)[number])
+    ) {
+      return { error: 'Perfil inválido.' }
+    }
 
     const senha = input.senha.trim() || '1234'
     const { data: authData, error: authErr } = await admin.auth.admin.createUser({
@@ -148,8 +168,9 @@ export async function criarOperador(input: {
       nome: input.nome.trim(),
       nome_completo: input.nomeCompleto?.trim() || null,
       matricula: input.matricula.trim(),
-      perfil: input.perfil,
+      perfil: perfilEfetivo,
       equipe: input.equipe || null,
+      email_funcional: input.emailFuncional?.trim() || null,
       numerica: input.numerica?.trim() || null,
       tipo_sanguineo: input.tipoSanguineo?.trim() || null,
       alergia: input.alergia?.trim() || null,
@@ -178,8 +199,9 @@ export async function criarOperador(input: {
           auth_id: authData.user.id,
           nome: input.nome.trim(),
           matricula: input.matricula.trim(),
-          perfil: input.perfil,
+          perfil: perfilEfetivo,
           equipe: input.equipe || null,
+          email_funcional: input.emailFuncional?.trim() || null,
           numerica: input.numerica?.trim() || null,
           tipo_sanguineo: input.tipoSanguineo?.trim() || null,
           alergia: input.alergia?.trim() || null,
@@ -205,7 +227,7 @@ export async function criarOperador(input: {
           auth_id: authData.user.id,
           nome: input.nome.trim(),
           matricula: input.matricula.trim(),
-          perfil: input.perfil,
+          perfil: perfilEfetivo,
           equipe: input.equipe || null,
           ativo: true,
         })
@@ -222,7 +244,9 @@ export async function criarOperador(input: {
     if (pediuCamposComplementares) {
       const { data: validacao, error: valErr } = await admin
         .from('operadores')
-        .select('id, nome_completo, numerica, tipo_sanguineo, alergia, contato_emergencia, nome_contato_emergencia, plano_saude, numero_carteirinha, cpf, email')
+        .select(
+          'id, nome_completo, numerica, tipo_sanguineo, alergia, contato_emergencia, nome_contato_emergencia, plano_saude, numero_carteirinha, cpf, email, email_funcional'
+        )
         .eq('id', String(data?.id))
         .maybeSingle()
       if (valErr || !validacao) {
@@ -238,14 +262,22 @@ export async function criarOperador(input: {
         campoDivergiu(input.planoSaude, validacao.plano_saude) ||
         campoDivergiu(input.numeroCarteirinha, validacao.numero_carteirinha) ||
         campoDivergiu(input.cpf, validacao.cpf) ||
-        campoDivergiu(input.email, validacao.email)
+        campoDivergiu(input.email, validacao.email) ||
+        campoDivergiu(input.emailFuncional, validacao.email_funcional)
       if (naoPersistiu) {
         return { error: 'Campos complementares não persistiram. Aplique a migration de operadores no banco.' }
       }
     }
     if (!data?.id) return { error: 'Não foi possível criar o operador.' }
     revalidatePath('/gestao')
-    logAudit({ gaepId: input.gaepId, operadorId: adminId, acao: 'CREATE', tabela: 'operadores', registroId: String(data.id), dadosDepois: { nome: input.nome, matricula: input.matricula, perfil: input.perfil } }).catch(() => {})
+    logAudit({
+      gaepId: input.gaepId,
+      operadorId: adminId,
+      acao: 'CREATE',
+      tabela: 'operadores',
+      registroId: String(data.id),
+      dadosDepois: { nome: input.nome, matricula: input.matricula, perfil: perfilEfetivo },
+    }).catch(() => {})
     return { id: String(data.id) }
   } catch (e) {
     return { error: (e as Error).message }
@@ -269,68 +301,61 @@ export async function editarOperador(
     numeroCarteirinha?: string
     cpf?: string
     email?: string
+    emailFuncional?: string
   }
 ): Promise<ActionResult> {
-  const PERFIS_VALIDOS = ['OPERADOR', 'ADMIN', 'SUPER_ADMIN'] as const
-  if (!PERFIS_VALIDOS.includes(updates.perfil as (typeof PERFIS_VALIDOS)[number])) {
-    return { error: 'Perfil inválido. Use OPERADOR, ADMIN ou SUPER_ADMIN.' }
-  }
-
   try {
-    const { admin, operadorId: adminId, gaepId } = await getAdminCtx()
+    const { admin, operadorId: adminId, gaepId, perfil: ctxPerfil } = await getAdminCtx()
+    const podeAlterarPerfil = ctxPerfil === 'SUPER_ADMIN'
+
+    if (
+      podeAlterarPerfil &&
+      !PERFIS_OPERADOR_DB.includes(updates.perfil as (typeof PERFIS_OPERADOR_DB)[number])
+    ) {
+      return { error: 'Perfil inválido.' }
+    }
+
     const pediuCamposComplementares = hasCamposComplementares(updates)
-    let { error } = await admin
-      .from('operadores')
-      .update({
-        nome: updates.nome.trim(),
-        nome_completo: updates.nomeCompleto?.trim() || null,
-        matricula: updates.matricula?.trim() || undefined,
-        perfil: updates.perfil,
-        equipe: updates.equipe || null,
-        numerica: updates.numerica?.trim() || null,
-        tipo_sanguineo: updates.tipoSanguineo?.trim() || null,
-        alergia: updates.alergia?.trim() || null,
-        contato_emergencia: updates.contatoEmergencia?.trim() || null,
-        nome_contato_emergencia: updates.nomeContatoEmergencia?.trim() || null,
-        plano_saude: updates.planoSaude?.trim() || null,
-        numero_carteirinha: updates.numeroCarteirinha?.trim() || null,
-        cpf: updates.cpf?.trim() || null,
-        email: updates.email?.trim() || null,
-      })
-      .eq('id', id)
+
+    const updateCompleto: Record<string, unknown> = {
+      nome: updates.nome.trim(),
+      nome_completo: updates.nomeCompleto?.trim() || null,
+      matricula: updates.matricula?.trim() || undefined,
+      equipe: updates.equipe || null,
+      email_funcional: updates.emailFuncional?.trim() || null,
+      numerica: updates.numerica?.trim() || null,
+      tipo_sanguineo: updates.tipoSanguineo?.trim() || null,
+      alergia: updates.alergia?.trim() || null,
+      contato_emergencia: updates.contatoEmergencia?.trim() || null,
+      nome_contato_emergencia: updates.nomeContatoEmergencia?.trim() || null,
+      plano_saude: updates.planoSaude?.trim() || null,
+      numero_carteirinha: updates.numeroCarteirinha?.trim() || null,
+      cpf: updates.cpf?.trim() || null,
+      email: updates.email?.trim() || null,
+    }
+    if (podeAlterarPerfil) {
+      updateCompleto.perfil = updates.perfil
+    }
+
+    let { error } = await admin.from('operadores').update(updateCompleto).eq('id', id)
 
     if (error) {
-      const retryWithoutNomeCompleto = await admin
-        .from('operadores')
-        .update({
-          nome: updates.nome.trim(),
-          matricula: updates.matricula?.trim() || undefined,
-          perfil: updates.perfil,
-          equipe: updates.equipe || null,
-          numerica: updates.numerica?.trim() || null,
-          tipo_sanguineo: updates.tipoSanguineo?.trim() || null,
-          alergia: updates.alergia?.trim() || null,
-          contato_emergencia: updates.contatoEmergencia?.trim() || null,
-          nome_contato_emergencia: updates.nomeContatoEmergencia?.trim() || null,
-          plano_saude: updates.planoSaude?.trim() || null,
-          numero_carteirinha: updates.numeroCarteirinha?.trim() || null,
-          cpf: updates.cpf?.trim() || null,
-          email: updates.email?.trim() || null,
-        })
-        .eq('id', id)
+      const retryPayload = { ...updateCompleto }
+      delete retryPayload.nome_completo
+      const retryWithoutNomeCompleto = await admin.from('operadores').update(retryPayload).eq('id', id)
       error = retryWithoutNomeCompleto.error
     }
 
     if (error) {
-      const fallback = await admin
-        .from('operadores')
-        .update({
-          nome: updates.nome.trim(),
-          matricula: updates.matricula?.trim() || undefined,
-          perfil: updates.perfil,
-          equipe: updates.equipe || null,
-        })
-        .eq('id', id)
+      const fallbackPayload: Record<string, unknown> = {
+        nome: updates.nome.trim(),
+        matricula: updates.matricula?.trim() || undefined,
+        equipe: updates.equipe || null,
+      }
+      if (podeAlterarPerfil) {
+        fallbackPayload.perfil = updates.perfil
+      }
+      const fallback = await admin.from('operadores').update(fallbackPayload).eq('id', id)
       error = fallback.error
     }
 
@@ -338,7 +363,9 @@ export async function editarOperador(
     if (pediuCamposComplementares) {
       const { data: validacao, error: valErr } = await admin
         .from('operadores')
-        .select('id, nome_completo, numerica, tipo_sanguineo, alergia, contato_emergencia, nome_contato_emergencia, plano_saude, numero_carteirinha, cpf, email')
+        .select(
+          'id, nome_completo, numerica, tipo_sanguineo, alergia, contato_emergencia, nome_contato_emergencia, plano_saude, numero_carteirinha, cpf, email, email_funcional'
+        )
         .eq('id', id)
         .maybeSingle()
       if (valErr || !validacao) {
@@ -354,13 +381,24 @@ export async function editarOperador(
         campoDivergiu(updates.planoSaude, validacao.plano_saude) ||
         campoDivergiu(updates.numeroCarteirinha, validacao.numero_carteirinha) ||
         campoDivergiu(updates.cpf, validacao.cpf) ||
-        campoDivergiu(updates.email, validacao.email)
+        campoDivergiu(updates.email, validacao.email) ||
+        campoDivergiu(updates.emailFuncional, validacao.email_funcional)
       if (naoPersistiu) {
         return { error: 'Campos complementares não persistiram. Aplique a migration de operadores no banco.' }
       }
     }
     revalidatePath('/gestao')
-    logAudit({ gaepId, operadorId: adminId, acao: 'UPDATE', tabela: 'operadores', registroId: id, dadosDepois: { nome: updates.nome, perfil: updates.perfil } }).catch(() => {})
+    logAudit({
+      gaepId,
+      operadorId: adminId,
+      acao: 'UPDATE',
+      tabela: 'operadores',
+      registroId: id,
+      dadosDepois: {
+        nome: updates.nome,
+        perfil: podeAlterarPerfil ? updates.perfil : '(inalterado)',
+      },
+    }).catch(() => {})
     return {}
   } catch (e) {
     return { error: (e as Error).message }

@@ -30,3 +30,8 @@ export const CAT_COLORS: Record<string, string> = {
 }
 
 export const CAT_ORDER = ['TREINAR', 'OPERAR', 'INSTRUIR'] as const
+
+/** Chave do ranking: mesma atividade pode existir em categorias diferentes no catálogo GAEP. */
+export function rankingAtividadeKey(categoriaId: string, atividadeId: string): string {
+  return `${categoriaId}:${atividadeId}`
+}

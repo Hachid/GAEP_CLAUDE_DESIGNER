@@ -69,7 +69,9 @@ describe('GestaoPage (page.tsx)', () => {
       ),
     } as never)
 
-    await expect(GestaoPage()).rejects.toThrow('REDIRECT:/relatorio')
+    await expect(GestaoPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
+      'REDIRECT:/relatorio'
+    )
     expect(redirect).toHaveBeenCalledWith('/relatorio')
   })
 })

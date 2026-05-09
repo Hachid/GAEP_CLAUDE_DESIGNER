@@ -5,24 +5,12 @@ import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { loginAction, type LoginState } from './actions'
 
-interface Operador {
-  id: string
-  nome: string
-  matricula: string
-}
-
 interface LoginFormProps {
-  operadores: Operador[]
-  carregamentoComErro?: boolean
   /** Deploy sem env do Supabase (ex.: build Vercel) — mensagem fixa para o administrador. */
   avisoAmbiente?: string
 }
 
-export function LoginForm({
-  operadores,
-  carregamentoComErro = false,
-  avisoAmbiente,
-}: LoginFormProps) {
+export function LoginForm({ avisoAmbiente }: LoginFormProps) {
   const [state, formAction, isPending] = useActionState<LoginState, FormData>(
     loginAction,
     null
@@ -115,7 +103,7 @@ export function LoginForm({
         <form action={formAction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
             <label
-              htmlFor="operador-select"
+              htmlFor="nome-guerra-input"
               style={{
                 display: 'block',
                 fontSize: '0.75rem',
@@ -126,14 +114,16 @@ export function LoginForm({
                 marginBottom: '6px',
               }}
             >
-              Operador
+              Nome de guerra
             </label>
-            <select
-              id="operador-select"
-              name="matricula"
+            <input
+              id="nome-guerra-input"
+              name="nome_guerra"
+              type="text"
+              autoComplete="username"
+              placeholder="Ex.: Silva"
               required
               disabled={Boolean(avisoAmbiente)}
-              defaultValue=""
               style={{
                 width: '100%',
                 padding: '12px 14px',
@@ -141,30 +131,9 @@ export function LoginForm({
                 border: '1.5px solid #e2e8f0',
                 fontSize: '0.95rem',
                 color: '#1e293b',
-                background: '#fff',
                 outline: 'none',
-                appearance: 'auto',
               }}
-            >
-              <option value="" disabled>Selecione o operador</option>
-              {operadores.map((op) => (
-                <option key={op.id} value={op.matricula}>
-                  {op.nome}
-                </option>
-              ))}
-            </select>
-            {carregamentoComErro && operadores.length === 0 && (
-              <p
-                role="alert"
-                style={{
-                  margin: '8px 0 0 0',
-                  fontSize: '0.8rem',
-                  color: '#b91c1c',
-                }}
-              >
-                Falha temporária ao carregar operadores. Atualize a página em alguns segundos.
-              </p>
-            )}
+            />
           </div>
 
           <div>
@@ -180,13 +149,14 @@ export function LoginForm({
                 marginBottom: '6px',
               }}
             >
-              Senha
+              Matrícula (senha)
             </label>
             <input
               id="senha-input"
               name="senha"
               type="password"
-              placeholder="Digite sua senha"
+              autoComplete="current-password"
+              placeholder="Sua matrícula"
               required
               disabled={Boolean(avisoAmbiente)}
               style={{

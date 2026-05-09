@@ -170,6 +170,52 @@ describe('fetchKPIData', () => {
     expect(result.porCategoria[1].totalMinutos).toBe(120)
   })
 
+  it('mantém ranking separado por (categoria, atividade): mesma atividade em duas categorias', async () => {
+    const mesmoAtividadeDuasCats = [
+      {
+        id: 'r-a',
+        data: '2026-04-01',
+        hora_inicio: '08:00',
+        hora_fim: '10:00',
+        plantao: null,
+        data_fim: null,
+        atividade_id: 'atv-x',
+        relatorista_id: null,
+        atividades: { id: 'atv-x', nome: 'Patrulhamento' },
+        categorias_atividade: { id: 'cat-op', nome: 'OPERAR' },
+      },
+      {
+        id: 'r-b',
+        data: '2026-04-02',
+        hora_inicio: '14:00',
+        hora_fim: '16:00',
+        plantao: null,
+        data_fim: null,
+        atividade_id: 'atv-x',
+        relatorista_id: null,
+        atividades: { id: 'atv-x', nome: 'Patrulhamento' },
+        categorias_atividade: { id: 'cat-ins', nome: 'INSTRUIR' },
+      },
+    ]
+    const { fetchKPIData } = await import('../actions')
+    mockAdminFrom.mockImplementation(
+      makeAdminMock({
+        relatorios: { data: mesmoAtividadeDuasCats, error: null },
+        operadores: { data: [], error: null },
+      })
+    )
+
+    const result = await fetchKPIData('gaep-1', filtrosMesAtual)
+
+    const instruir = result.rankingAtividades.find((a) => a.categoriaNome === 'INSTRUIR')
+    const operar = result.rankingAtividades.find((a) => a.categoriaNome === 'OPERAR')
+    expect(instruir?.nome).toBe('Patrulhamento')
+    expect(instruir?.totalMinutos).toBe(120)
+    expect(operar?.nome).toBe('Patrulhamento')
+    expect(operar?.totalMinutos).toBe(120)
+    expect(result.rankingAtividades).toHaveLength(2)
+  })
+
   it('ordena ranking de operadores por totalMinutos desc', async () => {
     const { fetchKPIData } = await import('../actions')
     mockAdminFrom.mockImplementation(

@@ -10,6 +10,8 @@
     "20260430_operadores_campos_complementares.sql",
     "20260430_missoes_compat_schema.sql",
     "20260430_missoes_qtd_decimal.sql",
-    "20260430_config_relatorio_layout_pdf.sql"
+    "20260430_config_relatorio_layout_pdf.sql",
+    "20260509_convites_operador.sql",
+    "20260509_operadores_email_funcional_if_missing.sql"
   ]
 }
