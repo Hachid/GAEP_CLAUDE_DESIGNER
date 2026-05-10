@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchKPIData, fetchEvolucao, fetchRelatoriosParaConsolidadoPdf } from '@/app/(app)/dashboard/actions'
+import { resolveAnaliseGaepIds, gaepIdsToCacheKey } from '@/app/(app)/dashboard/gaepScope'
 import type { DashboardFiltros } from '@/app/(app)/dashboard/types'
 import { getCategorias, getAtividades } from '@/lib/cache/queries'
 import { configRelatorioFromRow } from '@/lib/pdf/configRelatorioFromRow'
@@ -20,6 +21,7 @@ interface OperadorComGaep {
   nome_guerra: string
   matricula: string | null
   gaep_id: string
+  perfil: string
   gaeps: { id: string; nome: string } | null
 }
 
@@ -51,7 +53,7 @@ async function resolverOperadorGaep(
 ): Promise<OperadorComGaep | null> {
   const { data: byAuthId } = await admin
     .from('operadores')
-    .select('id, nome_guerra:nome, gaep_id, matricula, gaeps(id, nome:codigo)')
+    .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, nome:codigo)')
     .eq('auth_id', userId)
     .is('deleted_at', null)
     .maybeSingle<OperadorComGaep>()
@@ -63,7 +65,7 @@ async function resolverOperadorGaep(
 
   const { data: byMatricula } = await admin
     .from('operadores')
-    .select('id, nome_guerra:nome, gaep_id, matricula, gaeps(id, nome:codigo)')
+    .select('id, nome_guerra:nome, gaep_id, matricula, perfil, gaeps(id, nome:codigo)')
     .eq('matricula', matricula)
     .is('deleted_at', null)
     .maybeSingle<OperadorComGaep>()
@@ -87,6 +89,8 @@ export async function GET(req: Request) {
   const dataFim = (url.searchParams.get('dataFim') ?? '').trim()
   const categoriaId = (url.searchParams.get('categoriaId') ?? '').trim()
   const atividadeId = (url.searchParams.get('atividadeId') ?? '').trim()
+  const analiseGaepIdRaw = (url.searchParams.get('analiseGaepId') ?? '').trim()
+  const analiseGaepId = analiseGaepIdRaw === '' ? undefined : analiseGaepIdRaw
 
   if (!dataInicio || !dataFim) {
     return NextResponse.json({ error: 'Informe dataInicio e dataFim (YYYY-MM-DD).' }, { status: 400 })
@@ -115,8 +119,27 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Operador não encontrado.' }, { status: 403 })
   }
 
-  const gaepId = operador.gaep_id
-  const gaepCodigoStr = operador.gaeps.nome ?? ''
+  const gaepIdConfig = operador.gaep_id
+  const escopoIds = await resolveAnaliseGaepIds(
+    admin,
+    String(operador.perfil ?? 'OPERADOR'),
+    operador.gaep_id,
+    analiseGaepId
+  )
+  const escopoKey = gaepIdsToCacheKey(escopoIds)
+
+  let gaepCodigoStr = operador.gaeps.nome ?? ''
+  if (escopoIds.length > 1) {
+    gaepCodigoStr = 'Todos os GAEPs'
+  } else if (escopoIds.length === 1 && escopoIds[0] !== operador.gaep_id) {
+    const { data: gRow } = await admin
+      .from('gaeps')
+      .select('codigo')
+      .eq('id', escopoIds[0])
+      .maybeSingle<{ codigo: string }>()
+    if (gRow?.codigo) gaepCodigoStr = String(gRow.codigo)
+  }
+
   const consolidadorNome =
     operador.nome_guerra?.trim() || operador.matricula?.trim() || 'Não informado'
 
@@ -130,15 +153,15 @@ export async function GET(req: Request) {
   const [categorias, atividades, kpi, evolucaoFull, relatorios, withLayout] = await Promise.all([
     getCategorias(),
     getAtividades(),
-    fetchKPIData(gaepId, filtros),
-    fetchEvolucao(gaepId),
-    fetchRelatoriosParaConsolidadoPdf(gaepId, filtros),
+    fetchKPIData(escopoKey, filtros),
+    fetchEvolucao(escopoKey),
+    fetchRelatoriosParaConsolidadoPdf(escopoIds, filtros),
     admin
       .from('config_relatorio')
       .select(
         'id, titulo_texto, subtitulo_texto, descricao_texto, rodape_texto, titulo_estilo, subtitulo_estilo, descricao_estilo, rodape_estilo, timbrado_url, layout_pdf'
       )
-      .eq('gaep_id', gaepId)
+      .eq('gaep_id', gaepIdConfig)
       .maybeSingle(),
   ])
 
@@ -155,7 +178,7 @@ export async function GET(req: Request) {
         .select(
           'titulo_texto, subtitulo_texto, descricao_texto, rodape_texto, titulo_estilo, subtitulo_estilo, descricao_estilo, rodape_estilo, timbrado_url'
         )
-        .eq('gaep_id', gaepId)
+        .eq('gaep_id', gaepIdConfig)
         .maybeSingle()
     : null
   const cfgRow = (withLayout.error ? fallbackCfg?.data : withLayout.data) as Record<string, unknown> | null
@@ -166,7 +189,7 @@ export async function GET(req: Request) {
   const emitidoAgora = formatarDataHoraLocal(new Date().toISOString())
   const relatorioIds = relatorios.map((r) => r.id)
   const { hash, qrPayload } = consolidadoIntegrityParts({
-    gaepId,
+    gaepScopeKey: escopoKey,
     dataInicio,
     dataFim,
     categoriaId,

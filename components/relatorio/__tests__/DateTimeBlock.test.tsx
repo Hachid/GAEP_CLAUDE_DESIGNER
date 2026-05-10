@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
+import { useState } from 'react'
 import { DateTimeBlock } from '../DateTimeBlock'
 
 const baseProps = {
@@ -28,8 +29,8 @@ describe('DateTimeBlock', () => {
     const onDateChange = vi.fn()
     render(<DateTimeBlock {...baseProps} onDateChange={onDateChange} />)
     const dateInput = screen.getByDisplayValue('2026-05-01')
-    fireEvent.change(dateInput, { target: { value: '2026-05-01' } })
-    expect(onDateChange).toHaveBeenCalledWith('2026-05-01')
+    fireEvent.change(dateInput, { target: { value: '2026-05-02' } })
+    expect(onDateChange).toHaveBeenCalledWith('2026-05-02')
   })
 
   it('chama onStartChange quando hora de início muda', () => {
@@ -54,7 +55,22 @@ describe('DateTimeBlock', () => {
   })
 
   it('mostra duração calculada quando ambos os horários são preenchidos', () => {
-    render(<DateTimeBlock {...baseProps} />)
+    function Wrapper() {
+      const [date, setDate] = useState('2026-05-01')
+      const [startTime, setStartTime] = useState('')
+      const [endTime, setEndTime] = useState('')
+      return (
+        <DateTimeBlock
+          date={date}
+          startTime={startTime}
+          endTime={endTime}
+          onDateChange={setDate}
+          onStartChange={setStartTime}
+          onEndChange={setEndTime}
+        />
+      )
+    }
+    render(<Wrapper />)
     const timeInputs = document.querySelectorAll('input[type="time"]')
     fireEvent.change(timeInputs[0], { target: { value: '08:00' } })
     fireEvent.change(timeInputs[1], { target: { value: '12:00' } })

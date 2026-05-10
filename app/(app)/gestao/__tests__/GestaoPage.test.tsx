@@ -35,7 +35,7 @@ describe('GestaoPage (page.tsx)', () => {
     vi.clearAllMocks()
   })
 
-  it('redireciona para /relatorio quando o perfil não é ADMIN nem SUPER_ADMIN', async () => {
+  it('redireciona OPERADOR sem tab para /gestao?tab=dados-pessoais', async () => {
     const { redirect } = await import('next/navigation')
     const { createClient } = await import('@/lib/supabase/server')
     const { createAdminClient } = await import('@/lib/supabase/admin')
@@ -70,8 +70,48 @@ describe('GestaoPage (page.tsx)', () => {
     } as never)
 
     await expect(GestaoPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
-      'REDIRECT:/relatorio'
+      'REDIRECT:/gestao?tab=dados-pessoais'
     )
-    expect(redirect).toHaveBeenCalledWith('/relatorio')
+    expect(redirect).toHaveBeenCalledWith('/gestao?tab=dados-pessoais')
+  }, 15000)
+
+  it('redireciona ADMIN de tab=gaeps para efetivo', async () => {
+    const { redirect } = await import('next/navigation')
+    const { createClient } = await import('@/lib/supabase/server')
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    const GestaoPage = (await import('../page')).default
+
+    vi.mocked(redirect).mockImplementation((url: string) => {
+      throw new Error(`REDIRECT:${url}`)
+    })
+
+    vi.mocked(createClient).mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: 'auth-admin' } },
+          error: null,
+        }),
+      },
+    } as never)
+
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn(() =>
+        chainOperadorMaybeSingle({
+          data: {
+            id: 'op-admin',
+            nome: 'Admin',
+            perfil: 'ADMIN',
+            gaep_id: 'g1',
+            gaeps: { id: 'g1', codigo: 'GAEP-X', cidade: 'X', estado: 'PR' },
+          },
+          error: null,
+        })
+      ),
+    } as never)
+
+    await expect(GestaoPage({ searchParams: Promise.resolve({ tab: 'gaeps' }) })).rejects.toThrow(
+      'REDIRECT:/gestao?tab=efetivo'
+    )
+    expect(redirect).toHaveBeenCalledWith('/gestao?tab=efetivo')
   })
 })

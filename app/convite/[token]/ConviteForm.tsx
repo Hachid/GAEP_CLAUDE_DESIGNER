@@ -7,8 +7,6 @@ import {
   type ConviteSubmitState,
 } from '@/app/convite/actions'
 
-const EQUIPES = ['Alpha', 'Bravo', 'Charlie', 'Delta'] as const
-
 const fieldStyle: CSSProperties = {
   width: '100%',
   padding: '12px 14px',
@@ -159,20 +157,6 @@ export function ConviteForm({ token, gaepLabel }: ConviteFormProps) {
             style={fieldStyle}
           />
         </div>
-        <div>
-          <label htmlFor="convite-email-funcional" style={labelStyle}>
-            E-mail funcional (corporativo / PM)
-          </label>
-          <input
-            id="convite-email-funcional"
-            name="email_funcional"
-            type="email"
-            autoComplete="email"
-            placeholder="opcional@institucional.gov.br"
-            style={fieldStyle}
-          />
-        </div>
-
         <div style={sectionTitle}>Acesso</div>
         <div>
           <label htmlFor="convite-senha" style={labelStyle}>
@@ -187,21 +171,7 @@ export function ConviteForm({ token, gaepLabel }: ConviteFormProps) {
             style={fieldStyle}
           />
         </div>
-        <div>
-          <label htmlFor="convite-equipe" style={labelStyle}>
-            Equipe
-          </label>
-          <select id="convite-equipe" name="equipe" required style={{ ...fieldStyle, appearance: 'auto' }}>
-            <option value="" disabled>
-              Selecione
-            </option>
-            {EQUIPES.map((e) => (
-              <option key={e} value={e}>
-                {e}
-              </option>
-            ))}
-          </select>
-        </div>
+        <input type="hidden" name="equipe" value="Alpha" />
 
         <div style={sectionTitle}>Dados complementares</div>
         <div>
@@ -212,7 +182,7 @@ export function ConviteForm({ token, gaepLabel }: ConviteFormProps) {
             id="convite-numerica"
             name="numerica"
             type="text"
-            placeholder="Ex.: 12"
+            placeholder="01"
             style={fieldStyle}
           />
         </div>
@@ -275,7 +245,7 @@ export function ConviteForm({ token, gaepLabel }: ConviteFormProps) {
               id="convite-plano"
               name="plano_saude"
               type="text"
-              placeholder="Ex.: Unimed"
+              placeholder="Ex. Unimed ou SUS"
               style={fieldStyle}
             />
           </div>
@@ -307,7 +277,7 @@ export function ConviteForm({ token, gaepLabel }: ConviteFormProps) {
           </div>
           <div>
             <label htmlFor="convite-email" style={labelStyle}>
-              E-mail
+              E-mail pessoal
             </label>
             <input
               id="convite-email"

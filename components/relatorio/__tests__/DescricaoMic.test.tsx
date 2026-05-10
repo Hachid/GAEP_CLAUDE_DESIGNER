@@ -3,6 +3,21 @@ import { describe, it, expect, vi } from 'vitest'
 import { DescricaoMic } from '../DescricaoMic'
 
 describe('DescricaoMic', () => {
+  class MockSpeechRecognition {
+    lang = 'pt-BR'
+    interimResults = false
+    continuous = false
+    onresult = null
+    onend = null
+    onerror = null
+    start() {}
+    stop() {}
+  }
+
+  if (typeof window !== 'undefined') {
+    ;(window as Window & { SpeechRecognition?: unknown }).SpeechRecognition = MockSpeechRecognition
+  }
+
   it('renderiza textarea com placeholder', () => {
     render(<DescricaoMic value="" onChange={vi.fn()} />)
     expect(screen.getByPlaceholderText(/Descreva a atividade/i)).toBeInTheDocument()

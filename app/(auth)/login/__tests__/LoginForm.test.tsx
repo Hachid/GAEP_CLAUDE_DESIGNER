@@ -30,9 +30,9 @@ describe('LoginForm', () => {
     vi.clearAllMocks()
   })
 
-  it('renderiza o título GAEP-CAT', () => {
+  it('renderiza o título GAEP', () => {
     render(<LoginForm />)
-    expect(screen.getByText('GAEP-CAT')).toBeInTheDocument()
+    expect(screen.getByText('GAEP')).toBeInTheDocument()
   })
 
   it('renderiza o subtítulo correto', () => {
@@ -42,15 +42,15 @@ describe('LoginForm', () => {
     ).toBeInTheDocument()
   })
 
-  it('renderiza o campo nome de guerra', () => {
+  it('renderiza o campo nome de guerra com placeholder', () => {
     render(<LoginForm />)
-    expect(screen.getByLabelText(/Nome de guerra/i)).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Ex.: Silva')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /Nome de guerra/i })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Nome de Guerra')).toBeInTheDocument()
   })
 
-  it('renderiza o campo matrícula (senha) com placeholder correto', () => {
+  it('renderiza o campo senha com placeholder correto', () => {
     render(<LoginForm />)
-    const input = screen.getByPlaceholderText('Sua matrícula')
+    const input = screen.getByPlaceholderText('Matrícula (primeiro acesso) ou senha alterada')
     expect(input).toBeInTheDocument()
     expect(input).toHaveAttribute('type', 'password')
   })

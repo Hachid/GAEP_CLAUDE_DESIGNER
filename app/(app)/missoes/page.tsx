@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { SidebarNav } from '@/components/layout/SidebarNav'
 import { MissoesClient } from './MissoesClient'
 import type { MissaoRow, OperadorOption, TipoMissaoOption } from './MissoesClient'
+import { logAudit } from '@/lib/audit'
 
 interface OperadorComGaep {
   id: string
@@ -192,6 +193,17 @@ export default async function MissoesPage() {
       createdAt: m.created_at,
     }
   })
+
+  logAudit({
+    gaepId: gaep.id,
+    operadorId: operadorAtual.id,
+    acao: 'ACESSO',
+    tabela: 'missoes',
+    dadosDepois: {
+      tela: '/missoes',
+      perfil: operadorAtual.perfil ?? 'OPERADOR',
+    },
+  }).catch(() => {})
 
   // ── 5. Render ─────────────────────────────────────────────────
   return (

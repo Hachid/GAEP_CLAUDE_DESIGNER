@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect, useCallback } from 'react'
+import { useState, useTransition, useEffect, useCallback, useRef } from 'react'
 import {
   fetchAuditLogs,
   fetchGaepsParaFiltro,
@@ -81,6 +81,13 @@ const EMPTY_FILTERS = {
   dataFim: '',
 }
 
+function mergeUniqueById(base: AuditLogEntry[], incoming: AuditLogEntry[]): AuditLogEntry[] {
+  const map = new Map<string, AuditLogEntry>()
+  for (const row of base) map.set(row.id, row)
+  for (const row of incoming) map.set(row.id, row)
+  return Array.from(map.values())
+}
+
 export function LogsTab() {
   const [isPending, startTransition] = useTransition()
   const [rows, setRows] = useState<AuditLogEntry[]>([])
@@ -92,6 +99,7 @@ export function LogsTab() {
   const [gaepsList, setGaepsList] = useState<{ id: string; codigo: string }[]>([])
   const [tabelasList, setTabelasList] = useState<string[]>([])
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const inFlightPagesRef = useRef(new Set<number>())
 
   // Carrega metadados para os filtros uma vez
   useEffect(() => {
@@ -100,27 +108,33 @@ export function LogsTab() {
   }, [])
 
   const carregarLogs = useCallback((p: number, f: typeof EMPTY_FILTERS) => {
+    if (inFlightPagesRef.current.has(p)) return
+    inFlightPagesRef.current.add(p)
     startTransition(async () => {
-      setErrorMsg('')
-      const result = await fetchAuditLogs({
-        page: p,
-        gaepId: f.gaepId || undefined,
-        acao: f.acao || undefined,
-        tabela: f.tabela || undefined,
-        dataInicio: f.dataInicio || undefined,
-        dataFim: f.dataFim || undefined,
-      })
-      if (result.error) {
-        setErrorMsg(result.error)
-        return
+      try {
+        setErrorMsg('')
+        const result = await fetchAuditLogs({
+          page: p,
+          gaepId: f.gaepId || undefined,
+          acao: f.acao || undefined,
+          tabela: f.tabela || undefined,
+          dataInicio: f.dataInicio || undefined,
+          dataFim: f.dataFim || undefined,
+        })
+        if (result.error) {
+          setErrorMsg(result.error)
+          return
+        }
+        if (p === 0) {
+          setRows(mergeUniqueById([], result.rows))
+        } else {
+          setRows((prev) => mergeUniqueById(prev, result.rows))
+        }
+        setTotal(result.total)
+        setPage(p)
+      } finally {
+        inFlightPagesRef.current.delete(p)
       }
-      if (p === 0) {
-        setRows(result.rows)
-      } else {
-        setRows((prev) => [...prev, ...result.rows])
-      }
-      setTotal(result.total)
-      setPage(p)
     })
   }, [])
 

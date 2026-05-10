@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', icon: '📊', label: 'Dashboard', implemented: true },
   { href: '/operadores', icon: '👮', label: 'Individual', implemented: true },
   { href: '/missoes', icon: '✈️', label: 'Missões', implemented: true },
-  { href: '/gestao', icon: '⚙️', label: 'Gestão', adminOnly: true, implemented: true },
+  { href: '/gestao', icon: '⚙️', label: 'Gestão', implemented: true },
 ] as const
 
 export function SidebarNav({ nome, gaepCodigo, perfil }: SidebarNavProps) {
@@ -25,10 +25,12 @@ export function SidebarNav({ nome, gaepCodigo, perfil }: SidebarNavProps) {
   const searchParams = useSearchParams()
   const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(perfil)
   const isSuperAdmin = perfil === 'SUPER_ADMIN'
-  const activeGestaoTab = searchParams.get('tab') ?? 'efetivo'
+  const defaultGestaoTab = isAdmin ? 'efetivo' : 'dados-pessoais'
+  const activeGestaoTab = searchParams.get('tab') ?? defaultGestaoTab
 
-  const visible = NAV_ITEMS.filter((item) => !('adminOnly' in item && item.adminOnly) || isAdmin)
-  const gestaoSubItems = [
+  const visible = NAV_ITEMS
+  const gestaoSubItemsTodos = [{ href: '/gestao?tab=dados-pessoais', icon: '👤', label: 'Dados Pessoais', tab: 'dados-pessoais' }] as const
+  const gestaoSubItemsAdmin = [
     { href: '/gestao?tab=efetivo', icon: '👮', label: 'Efetivo', tab: 'efetivo' },
     { href: '/gestao?tab=atividades', icon: '📋', label: 'Atividades', tab: 'atividades' },
     { href: '/gestao?tab=feriados', icon: '📅', label: 'Feriados', tab: 'feriados' },
@@ -36,12 +38,16 @@ export function SidebarNav({ nome, gaepCodigo, perfil }: SidebarNavProps) {
     { href: '/gestao?tab=relatorio', icon: '📄', label: 'Relatório', tab: 'relatorio' },
     { href: '/gestao?tab=diarias', icon: '💰', label: 'Diárias', tab: 'diarias' },
     { href: '/gestao?tab=importacao', icon: '📥', label: 'Importar', tab: 'importacao' },
-    ...(isSuperAdmin
-      ? [
-          { href: '/gestao?tab=gaeps', icon: '🌐', label: 'GAEPs', tab: 'gaeps' },
-          { href: '/gestao?tab=logs', icon: '📋', label: 'Logs', tab: 'logs' },
-        ]
-      : []),
+  ] as const
+  const gestaoSubItemsSuper = [
+    { href: '/gestao?tab=gaeps', icon: '🌐', label: 'GAEPs', tab: 'gaeps' },
+    { href: '/gestao?tab=logs', icon: '📋', label: 'Logs', tab: 'logs' },
+  ] as const
+
+  const gestaoSubItems = [
+    ...gestaoSubItemsTodos,
+    ...(isAdmin ? gestaoSubItemsAdmin : []),
+    ...(isSuperAdmin ? gestaoSubItemsSuper : []),
   ] as const
 
   return (
@@ -57,7 +63,6 @@ export function SidebarNav({ nome, gaepCodigo, perfil }: SidebarNavProps) {
           background: '#1a237e',
           display: 'flex',
           alignItems: 'center',
-          padding: '0 16px',
           zIndex: 400,
           boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
         }}
@@ -74,12 +79,27 @@ export function SidebarNav({ nome, gaepCodigo, perfil }: SidebarNavProps) {
             padding: '6px 8px',
             borderRadius: 8,
             lineHeight: 1,
-            marginRight: 12,
+            position: 'absolute',
+            left: 12,
           }}
         >
           ☰
         </button>
-        <span style={{ color: '#fff', fontWeight: 900, fontSize: '1.1rem', letterSpacing: 1 }}>
+        <span
+          style={{
+            color: '#fff',
+            fontWeight: 900,
+            fontSize: '1.1rem',
+            letterSpacing: 1,
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            maxWidth: 'calc(100% - 96px)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
           {gaepCodigo}
         </span>
       </header>

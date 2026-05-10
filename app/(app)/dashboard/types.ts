@@ -47,11 +47,16 @@ export type KPIData = {
   rankingOperadores: OperadorStat[]
 }
 
+/** Valor de `analiseGaepId` para consolidar todos os GAEPs (somente SUPER_ADMIN). */
+export const DASHBOARD_ANALISE_TODOS_GAEPS = '__ALL__' as const
+
 export type DashboardFiltros = {
   dataInicio: string  // YYYY-MM-DD
   dataFim: string     // YYYY-MM-DD
   categoriaId: string // '' = todas
   atividadeId: string // '' = todas
+  /** SUPER_ADMIN: omitir = GAEP do cadastro do operador; id UUID = outro GAEP; `DASHBOARD_ANALISE_TODOS_GAEPS` = todos. */
+  analiseGaepId?: string
 }
 
 /** Linha de relatório para PDF consolidado (texto + metadados + fotos). */

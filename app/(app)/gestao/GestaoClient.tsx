@@ -27,7 +27,9 @@ import {
 } from './actions'
 import { gerarConviteEfetivo } from '@/app/convite/actions'
 import { LogsTab } from './LogsTab'
+import { DadosPessoaisTab } from './DadosPessoaisTab'
 import { DEFAULT_TITULO_RELATORIO_INSTITUCIONAL } from '@/lib/pdf/defaultTituloRelatorio'
+import { emailSistemaFromMatricula } from '@/lib/email-sistema'
 
 // ── Tipos públicos ────────────────────────────────────────────
 
@@ -126,7 +128,12 @@ export interface GaepRow {
   ativo: boolean
 }
 
+export type GestaoModo = 'full' | 'self-only'
+
 export interface GestaoData {
+  gestaoModo?: GestaoModo
+  /** Linha do operador logado (aba Dados Pessoais). */
+  operadorPessoal: OperadorRow
   operadorAtual: { id: string; nome: string; perfil: string }
   gaep: { id: string; codigo: string; cidade: string; estado: string }
   operadores: OperadorRow[]
@@ -386,8 +393,6 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 // ── Tab: Efetivo ──────────────────────────────────────────────
 
 const PERFIS = ['OPERADOR', 'SUPERVISOR', 'ADMIN', 'SUPER_ADMIN', 'AUDITOR']
-const EQUIPES = ['Alpha', 'Bravo', 'Charlie', 'Delta']
-
 type ModalMode = 'add' | OperadorRow | null
 
 function TabEfetivo({
@@ -395,11 +400,14 @@ function TabEfetivo({
   gaepCodigo,
   initial,
   isSuperAdmin,
+  gaepsConvite,
 }: {
   gaepId: string
   gaepCodigo: string
   initial: OperadorRow[]
   isSuperAdmin: boolean
+  /** Lista de unidades (Super Admin) para escolher o GAEP do convite antes de gerar o link. */
+  gaepsConvite: GaepRow[]
 }) {
   const [ops, setOps] = useState<OperadorRow[]>(initial)
   const [modal, setModal] = useState<ModalMode>(null)
@@ -421,12 +429,18 @@ function TabEfetivo({
     numeroCarteirinha: '',
     cpf: '',
     email: '',
-    emailFuncional: '',
   })
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState('')
   const [pending, startTransition] = useTransition()
   const [convitePending, startConviteTransition] = useTransition()
+  const [conviteGaepAlvoId, setConviteGaepAlvoId] = useState('')
+
+  const precisaEscolherGaepConvite = isSuperAdmin && gaepsConvite.length > 0
+  const codigoGaepConviteExibido =
+    precisaEscolherGaepConvite && conviteGaepAlvoId
+      ? gaepsConvite.find((g) => g.id === conviteGaepAlvoId)?.codigo ?? '…'
+      : gaepCodigo
 
   function showToast(msg: string) {
     setToast(msg)
@@ -450,7 +464,6 @@ function TabEfetivo({
       numeroCarteirinha: '',
       cpf: '',
       email: '',
-      emailFuncional: '',
     })
     setModal('add')
   }
@@ -472,7 +485,6 @@ function TabEfetivo({
       numeroCarteirinha: op.numero_carteirinha ?? '',
       cpf: op.cpf ?? '',
       email: op.email ?? '',
-      emailFuncional: op.email_funcional ?? '',
     })
     setModal(op)
   }
@@ -495,7 +507,7 @@ function TabEfetivo({
             perfil: form.perfil,
             equipe: form.equipe,
             ativo: true,
-            email_funcional: form.emailFuncional.trim() || null,
+            email_funcional: form.matricula.trim() ? emailSistemaFromMatricula(form.matricula) : null,
             numerica: form.numerica || null,
             tipo_sanguineo: form.tipoSanguineo || null,
             alergia: form.alergia || null,
@@ -525,7 +537,6 @@ function TabEfetivo({
           numeroCarteirinha: form.numeroCarteirinha,
           cpf: form.cpf,
           email: form.email,
-          emailFuncional: form.emailFuncional,
         })
         if (res.error) { showToast(`❌ ${res.error}`); return }
         setOps((prev) =>
@@ -546,7 +557,9 @@ function TabEfetivo({
                   numero_carteirinha: form.numeroCarteirinha || null,
                   cpf: form.cpf || null,
                   email: form.email || null,
-                  email_funcional: form.emailFuncional.trim() || null,
+                  email_funcional: form.matricula.trim()
+                    ? emailSistemaFromMatricula(form.matricula)
+                    : x.email_funcional,
                 }
               : x
           )
@@ -559,7 +572,12 @@ function TabEfetivo({
 
   function gerarLinkConvite() {
     startConviteTransition(async () => {
-      const res = await gerarConviteEfetivo(gaepId)
+      const alvo = precisaEscolherGaepConvite ? conviteGaepAlvoId : gaepId
+      if (precisaEscolherGaepConvite && !alvo) {
+        showToast('❌ Selecione o GAEP do convite.')
+        return
+      }
+      const res = await gerarConviteEfetivo(alvo)
       if (res?.error) {
         showToast(`❌ ${res.error}`)
         return
@@ -598,16 +616,65 @@ function TabEfetivo({
             borderBottom: '1px solid #f1f5f9',
           }}
         >
-          Gere um link para um policial concluir o cadastro em <strong style={{ color: '#1e293b' }}>{gaepCodigo}</strong>.
+          {precisaEscolherGaepConvite ? (
+            <>
+              Escolha abaixo o <strong>GAEP do convite</strong> e depois gere o link. O convidado cadastra-se{' '}
+              <strong>somente nessa unidade</strong> (não escolhe GAEP no formulário).
+            </>
+          ) : (
+            <>
+              Gere um link para um policial concluir o cadastro em{' '}
+              <strong style={{ color: '#1e293b' }}>{gaepCodigo}</strong>.
+            </>
+          )}{' '}
           O convidado preenche o mesmo cadastro da gestão (sempre como <strong>OPERADOR</strong>); só o Super Admin altera perfil depois.
           Login com <strong>nome de guerra</strong>; senha = matrícula se não definir outra senha inicial.{' '}
           <strong>O link é válido por 7 dias.</strong>
+          {precisaEscolherGaepConvite && conviteGaepAlvoId ? (
+            <span>
+              {' '}
+              Unidade do link: <strong style={{ color: '#1e293b' }}>{codigoGaepConviteExibido}</strong>.
+            </span>
+          ) : null}
         </div>
         <div style={{ padding: '14px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {precisaEscolherGaepConvite ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label htmlFor="convite-gaep-alvo" style={{ fontWeight: 700, fontSize: '0.72rem', color: '#64748b' }}>
+                GAEP do convite
+              </label>
+              <select
+                id="convite-gaep-alvo"
+                value={conviteGaepAlvoId}
+                onChange={(e) => {
+                  setConviteGaepAlvoId(e.target.value)
+                  setConviteUrl('')
+                  setConviteExpIso('')
+                }}
+                style={{
+                  ...mInput,
+                  minHeight: 44,
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  color: '#1e293b',
+                  background: '#f8fafc',
+                }}
+              >
+                <option value="">Selecione o GAEP…</option>
+                {gaepsConvite
+                  .filter((g) => g.id)
+                  .map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.codigo} — {g.cidade}/{g.estado}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={gerarLinkConvite}
-            disabled={pending || convitePending}
+            disabled={pending || convitePending || (precisaEscolherGaepConvite && !conviteGaepAlvoId)}
             style={{
               alignSelf: 'flex-start',
               padding: '10px 16px',
@@ -617,11 +684,14 @@ function TabEfetivo({
               color: '#fff',
               fontWeight: 700,
               fontSize: '0.85rem',
-              cursor: pending || convitePending ? 'not-allowed' : 'pointer',
+              cursor:
+                pending || convitePending || (precisaEscolherGaepConvite && !conviteGaepAlvoId)
+                  ? 'not-allowed'
+                  : 'pointer',
               minHeight: 44,
             }}
           >
-            {convitePending ? 'Gerando…' : 'Link de Convite'}
+            {convitePending ? 'Gerando…' : 'Gerar link de convite'}
           </button>
           {conviteUrl ? (
             <>
@@ -764,15 +834,20 @@ function TabEfetivo({
               placeholder="Ex: 013"
             />
           </FormField>
-          <FormField label="E-mail funcional (corporativo / PM)">
-            <input
-              type="email"
-              value={form.emailFuncional}
-              onChange={(e) => setForm((f) => ({ ...f, emailFuncional: e.target.value }))}
-              style={mInput}
-              placeholder="opcional@institucional.gov.br"
-            />
-          </FormField>
+          {isSuperAdmin ? (
+            <FormField label="E-mail do sistema">
+              <input
+                readOnly
+                tabIndex={-1}
+                value={form.matricula.trim() ? emailSistemaFromMatricula(form.matricula) : '—'}
+                style={{ ...mInput, background: '#e2e8f0', color: '#475569' }}
+                aria-describedby="hint-email-sistema"
+              />
+              <p id="hint-email-sistema" style={{ margin: '6px 0 0 0', fontSize: '0.72rem', color: '#64748b', lineHeight: 1.4 }}>
+                Gerado automaticamente a partir da matrícula (conta interna de autenticação).
+              </p>
+            </FormField>
+          ) : null}
           {modal === 'add' && (
             <FormField label="Senha inicial (padrão: 1234)">
               <input
@@ -784,75 +859,49 @@ function TabEfetivo({
             </FormField>
           )}
           {isSuperAdmin ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <FormField label="Perfil de Acesso">
-                <select
-                  value={form.perfil}
-                  onChange={(e) => setForm((f) => ({ ...f, perfil: e.target.value }))}
-                  style={mInput}
-                >
-                  {PERFIS.map((p) => (
-                    <option key={p}>{p}</option>
-                  ))}
-                </select>
-              </FormField>
-              <FormField label="Equipe">
-                <select
-                  value={form.equipe}
-                  onChange={(e) => setForm((f) => ({ ...f, equipe: e.target.value }))}
-                  style={mInput}
-                >
-                  {EQUIPES.map((e) => (
-                    <option key={e}>{e}</option>
-                  ))}
-                </select>
-              </FormField>
-            </div>
-          ) : (
-            <>
-              <p
-                style={{
-                  margin: '0 0 10px 0',
-                  padding: '10px 12px',
-                  fontSize: '0.78rem',
-                  lineHeight: 1.45,
-                  color: '#475569',
-                  background: '#f8fafc',
-                  borderRadius: 10,
-                  border: '1px solid #e2e8f0',
-                }}
+            <FormField label="Perfil de Acesso">
+              <select
+                value={form.perfil}
+                onChange={(e) => setForm((f) => ({ ...f, perfil: e.target.value }))}
+                style={mInput}
               >
-                {modal === 'add' ? (
-                  <>
-                    O cadastro será criado como <strong>OPERADOR</strong>. Somente{' '}
-                    <strong>Super Admin</strong> altera perfil (permissões) depois.
-                  </>
-                ) : (
-                  <>
-                    <strong>Perfil:</strong> {form.perfil}. Somente <strong>Super Admin</strong> altera
-                    permissões.
-                  </>
-                )}
-              </p>
-              <FormField label="Equipe">
-                <select
-                  value={form.equipe}
-                  onChange={(e) => setForm((f) => ({ ...f, equipe: e.target.value }))}
-                  style={mInput}
-                >
-                  {EQUIPES.map((e) => (
-                    <option key={e}>{e}</option>
-                  ))}
-                </select>
-              </FormField>
-            </>
+                {PERFIS.map((p) => (
+                  <option key={p}>{p}</option>
+                ))}
+              </select>
+            </FormField>
+          ) : (
+            <p
+              style={{
+                margin: '0 0 10px 0',
+                padding: '10px 12px',
+                fontSize: '0.78rem',
+                lineHeight: 1.45,
+                color: '#475569',
+                background: '#f8fafc',
+                borderRadius: 10,
+                border: '1px solid #e2e8f0',
+              }}
+            >
+              {modal === 'add' ? (
+                <>
+                  O cadastro será criado como <strong>OPERADOR</strong>. Somente{' '}
+                  <strong>Super Admin</strong> altera perfil (permissões) depois.
+                </>
+              ) : (
+                <>
+                  <strong>Perfil:</strong> {form.perfil}. Somente <strong>Super Admin</strong> altera
+                  permissões.
+                </>
+              )}
+            </p>
           )}
           <FormField label="Numérica">
             <input
               value={form.numerica}
               onChange={(e) => setForm((f) => ({ ...f, numerica: e.target.value }))}
               style={mInput}
-              placeholder="Ex: 12"
+              placeholder="01"
             />
           </FormField>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -895,7 +944,7 @@ function TabEfetivo({
                 value={form.planoSaude}
                 onChange={(e) => setForm((f) => ({ ...f, planoSaude: e.target.value }))}
                 style={mInput}
-                placeholder="Ex: Unimed"
+                placeholder="Ex. Unimed ou SUS"
               />
             </FormField>
             <FormField label="Nº da Carteirinha">
@@ -915,7 +964,7 @@ function TabEfetivo({
                 placeholder="Somente números"
               />
             </FormField>
-            <FormField label="E-mail">
+            <FormField label="E-mail pessoal">
               <input
                 type="email"
                 value={form.email}
@@ -3035,6 +3084,7 @@ interface Tab {
 
 export function GestaoClient({ data }: { data: GestaoData }) {
   const isSuperAdmin = data.operadorAtual.perfil === 'SUPER_ADMIN'
+  const modoSelfOnly = data.gestaoModo === 'self-only'
   const searchParams = useSearchParams()
   const { mergeDiasUteisMes } = useVariavelMes()
 
@@ -3044,7 +3094,15 @@ export function GestaoClient({ data }: { data: GestaoData }) {
     )
   }, [data.diasUteisMes, mergeDiasUteisMes])
 
-  const tabs: Tab[] = [
+  const tabDadosPessoais: Tab = {
+    id: 'dados-pessoais',
+    label: 'Dados Pessoais',
+    comp: (
+      <DadosPessoaisTab initial={data.operadorPessoal} perfil={data.operadorAtual.perfil} />
+    ),
+  }
+
+  const tabsAdmin: Tab[] = [
     {
       id: 'efetivo',
       label: 'Efetivo',
@@ -3054,6 +3112,7 @@ export function GestaoClient({ data }: { data: GestaoData }) {
           gaepCodigo={data.gaep.codigo}
           initial={data.operadores}
           isSuperAdmin={isSuperAdmin}
+          gaepsConvite={data.gaeps}
         />
       ),
     },
@@ -3108,7 +3167,10 @@ export function GestaoClient({ data }: { data: GestaoData }) {
       : []),
   ]
 
-  const tabParam = searchParams?.get('tab') ?? 'efetivo'
+  const tabs: Tab[] = modoSelfOnly ? [tabDadosPessoais] : [tabDadosPessoais, ...tabsAdmin]
+
+  const tabParamDefault = modoSelfOnly ? 'dados-pessoais' : 'efetivo'
+  const tabParam = searchParams?.get('tab') ?? tabParamDefault
   const current = tabs.find((t) => t.id === tabParam) ?? tabs[0]
 
   return (
@@ -3131,11 +3193,19 @@ export function GestaoClient({ data }: { data: GestaoData }) {
             Nível de Acesso
           </div>
           <div style={{ fontWeight: 800, color: isSuperAdmin ? '#7c3aed' : '#1a237e', fontSize: '1rem' }}>
-            {isSuperAdmin ? '🔑 SUPER ADMIN — Acesso Total' : `⚙️ ADMIN — ${data.gaep.codigo}`}
+            {modoSelfOnly
+              ? `👤 ${data.operadorAtual.perfil} — Dados pessoais`
+              : isSuperAdmin
+                ? '🔑 SUPER ADMIN — Acesso Total'
+                : `⚙️ ADMIN — ${data.gaep.codigo}`}
           </div>
           <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
             {data.operadorAtual.nome} ·{' '}
-            {isSuperAdmin ? 'Todos os GAEPs' : `${data.gaep.codigo} · ${data.gaep.cidade}/${data.gaep.estado}`}
+            {modoSelfOnly
+              ? `${data.gaep.codigo} · ${data.gaep.cidade}/${data.gaep.estado}`
+              : isSuperAdmin
+                ? 'Todos os GAEPs'
+                : `${data.gaep.codigo} · ${data.gaep.cidade}/${data.gaep.estado}`}
           </div>
         </div>
       </div>

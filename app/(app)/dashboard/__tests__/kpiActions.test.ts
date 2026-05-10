@@ -69,20 +69,38 @@ const filtrosMesAtual = {
 // Relatórios para KPI com atividade e categoria
 const relatoriosKPI = [
   {
-    id: 'r1', hora_inicio: '08:00', hora_fim: '12:00',
-    atividade_id: 'atv-1', relatorista_id: 'op-1',
+    id: 'r1',
+    data: '2026-04-02',
+    hora_inicio: '08:00',
+    hora_fim: '12:00',
+    plantao: null,
+    data_fim: null,
+    atividade_id: 'atv-1',
+    relatorista_id: 'op-1',
     atividades: { id: 'atv-1', nome: 'Ronda' },
     categorias_atividade: { id: 'cat-1', nome: 'MISSÃO' },
   },
   {
-    id: 'r2', hora_inicio: '14:00', hora_fim: '18:00',
-    atividade_id: 'atv-1', relatorista_id: 'op-2',
+    id: 'r2',
+    data: '2026-04-03',
+    hora_inicio: '14:00',
+    hora_fim: '18:00',
+    plantao: null,
+    data_fim: null,
+    atividade_id: 'atv-1',
+    relatorista_id: 'op-2',
     atividades: { id: 'atv-1', nome: 'Ronda' },
     categorias_atividade: { id: 'cat-1', nome: 'MISSÃO' },
   },
   {
-    id: 'r3', hora_inicio: '08:00', hora_fim: '10:00',
-    atividade_id: 'atv-2', relatorista_id: 'op-1',
+    id: 'r3',
+    data: '2026-04-04',
+    hora_inicio: '08:00',
+    hora_fim: '10:00',
+    plantao: null,
+    data_fim: null,
+    atividade_id: 'atv-2',
+    relatorista_id: 'op-1',
     atividades: { id: 'atv-2', nome: 'Patrulhamento' },
     categorias_atividade: { id: 'cat-2', nome: 'POLICIAMENTO' },
   },
@@ -92,6 +110,32 @@ const operadoresKPI = [
   { id: 'op-1', nome: 'João Silva', numerica: '001' },
   { id: 'op-2', nome: 'Maria Santos', numerica: '002' },
 ]
+
+function mockRelatoriosEDiasUteis(relatoriosData: unknown[]) {
+  mockAdminFrom.mockImplementation((table: string) => {
+    if (table === 'relatorios') return makeChain({ data: relatoriosData, error: null })
+    if (table === 'gaep_dias_uteis') return makeChain({ data: [], error: null })
+    if (table === 'operadores') return makeChain({ data: [], error: null })
+    return makeChain({ data: null, error: null })
+  })
+}
+
+function relEvolucaoRow(input: {
+  data: string
+  hora_inicio: string
+  hora_fim: string
+  relatorista_id?: string | null
+}) {
+  return {
+    data: input.data,
+    hora_inicio: input.hora_inicio,
+    hora_fim: input.hora_fim,
+    plantao: null,
+    data_fim: null,
+    relatorista_id: input.relatorista_id ?? 'op-evol',
+    relatorio_participantes: [],
+  }
+}
 
 // ── fetchKPIData ───────────────────────────────────────────────
 describe('fetchKPIData', () => {
@@ -286,10 +330,10 @@ describe('fetchEvolucao', () => {
   it('retorna array de EvolucaoMes', async () => {
     const { fetchEvolucao } = await import('../actions')
     const rows = [
-      { data: '2026-04-15', hora_inicio: '08:00', hora_fim: '12:00' },
-      { data: '2026-04-20', hora_inicio: '14:00', hora_fim: '18:00' },
+      relEvolucaoRow({ data: '2026-04-15', hora_inicio: '08:00', hora_fim: '12:00' }),
+      relEvolucaoRow({ data: '2026-04-20', hora_inicio: '14:00', hora_fim: '18:00' }),
     ]
-    mockAdminFrom.mockReturnValue(makeChain({ data: rows, error: null }))
+    mockRelatoriosEDiasUteis(rows)
 
     const result = await fetchEvolucao('gaep-1')
 
@@ -306,10 +350,10 @@ describe('fetchEvolucao', () => {
   it('agrupa relatórios do mesmo mês', async () => {
     const { fetchEvolucao } = await import('../actions')
     const rows = [
-      { data: '2026-04-01', hora_inicio: '08:00', hora_fim: '10:00' },
-      { data: '2026-04-15', hora_inicio: '14:00', hora_fim: '16:00' },
+      relEvolucaoRow({ data: '2026-04-01', hora_inicio: '08:00', hora_fim: '10:00' }),
+      relEvolucaoRow({ data: '2026-04-15', hora_inicio: '14:00', hora_fim: '16:00' }),
     ]
-    mockAdminFrom.mockReturnValue(makeChain({ data: rows, error: null }))
+    mockRelatoriosEDiasUteis(rows)
 
     const result = await fetchEvolucao('gaep-1')
 
@@ -322,11 +366,11 @@ describe('fetchEvolucao', () => {
   it('retorna meses em ordem cronológica', async () => {
     const { fetchEvolucao } = await import('../actions')
     const rows = [
-      { data: '2026-04-10', hora_inicio: '08:00', hora_fim: '10:00' },
-      { data: '2026-03-05', hora_inicio: '08:00', hora_fim: '12:00' },
-      { data: '2026-02-20', hora_inicio: '09:00', hora_fim: '13:00' },
+      relEvolucaoRow({ data: '2026-04-10', hora_inicio: '08:00', hora_fim: '10:00' }),
+      relEvolucaoRow({ data: '2026-03-05', hora_inicio: '08:00', hora_fim: '12:00' }),
+      relEvolucaoRow({ data: '2026-02-20', hora_inicio: '09:00', hora_fim: '13:00' }),
     ]
-    mockAdminFrom.mockReturnValue(makeChain({ data: rows, error: null }))
+    mockRelatoriosEDiasUteis(rows)
 
     const result = await fetchEvolucao('gaep-1')
 
@@ -337,7 +381,7 @@ describe('fetchEvolucao', () => {
 
   it('retorna array vazio quando não há dados', async () => {
     const { fetchEvolucao } = await import('../actions')
-    mockAdminFrom.mockReturnValue(makeChain({ data: [], error: null }))
+    mockRelatoriosEDiasUteis([])
 
     const result = await fetchEvolucao('gaep-sem-dados')
 
@@ -346,14 +390,22 @@ describe('fetchEvolucao', () => {
 
   it('filtra apenas últimos 12 meses', async () => {
     const { fetchEvolucao } = await import('../actions')
-    const ch = makeChain({ data: [], error: null })
-    mockAdminFrom.mockReturnValue(ch)
+    let relChain: ReturnType<typeof makeChain> | undefined
+    mockAdminFrom.mockImplementation((table: string) => {
+      if (table === 'relatorios') {
+        const c = makeChain({ data: [], error: null })
+        relChain = c
+        return c
+      }
+      if (table === 'gaep_dias_uteis') return makeChain({ data: [], error: null })
+      if (table === 'operadores') return makeChain({ data: [], error: null })
+      return makeChain({ data: null, error: null })
+    })
 
     await fetchEvolucao('gaep-1')
 
-    // Deve usar .gte('data', dataCorte) para limitar a 12 meses
-    expect(ch.gte).toHaveBeenCalled()
-    const gteArg = (ch.gte as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(relChain?.gte).toHaveBeenCalled()
+    const gteArg = (relChain?.gte as ReturnType<typeof vi.fn>).mock.calls[0]
     expect(gteArg[0]).toBe('data')
   })
 })
@@ -381,7 +433,7 @@ describe('refreshKPIData', () => {
     mockAdminFrom.mockImplementation(
       makeAdminMock({
         operadores: [
-          { data: { gaep_id: 'gaep-1' }, error: null },
+          { data: { gaep_id: 'gaep-1', perfil: 'OPERADOR' }, error: null },
           { data: operadoresKPI, error: null },
         ],
         relatorios: { data: [], error: null },

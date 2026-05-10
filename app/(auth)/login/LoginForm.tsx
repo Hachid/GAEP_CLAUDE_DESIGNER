@@ -56,7 +56,7 @@ export function LoginForm({ avisoAmbiente }: LoginFormProps) {
           margin: '0 0 4px 0',
         }}
       >
-        GAEP-CAT
+        GAEP
       </h1>
 
       <p
@@ -102,26 +102,13 @@ export function LoginForm({ avisoAmbiente }: LoginFormProps) {
       >
         <form action={formAction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
-            <label
-              htmlFor="nome-guerra-input"
-              style={{
-                display: 'block',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                color: '#64748b',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                marginBottom: '6px',
-              }}
-            >
-              Nome de guerra
-            </label>
             <input
               id="nome-guerra-input"
               name="nome_guerra"
               type="text"
-              autoComplete="username"
-              placeholder="Ex.: Silva"
+              autoComplete="off"
+              aria-label="Nome de guerra"
+              placeholder="Nome de Guerra"
               required
               disabled={Boolean(avisoAmbiente)}
               style={{
@@ -149,14 +136,14 @@ export function LoginForm({ avisoAmbiente }: LoginFormProps) {
                 marginBottom: '6px',
               }}
             >
-              Matrícula (senha)
+              Senha
             </label>
             <input
               id="senha-input"
               name="senha"
               type="password"
               autoComplete="current-password"
-              placeholder="Sua matrícula"
+              placeholder="Matrícula (primeiro acesso) ou senha alterada"
               required
               disabled={Boolean(avisoAmbiente)}
               style={{

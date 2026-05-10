@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { RelatorioForm } from './RelatorioForm'
 import { SidebarNav } from '@/components/layout/SidebarNav'
 import { getCategorias, getAtividades } from '@/lib/cache/queries'
+import { logAudit } from '@/lib/audit'
 
 /** Formato retornado pelo Supabase ao selecionar operador com join de gaeps. */
 interface OperadorComGaep {
@@ -208,6 +209,17 @@ export default async function RelatorioPage() {
   } catch (err) {
     console.error('[RelatorioPage] Erro ao buscar dados do formulário:', err)
   }
+
+  logAudit({
+    gaepId: gaep.id,
+    operadorId: operadorAtual.id,
+    acao: 'ACESSO',
+    tabela: 'relatorio',
+    dadosDepois: {
+      tela: '/relatorio',
+      perfil: operadorAtual.perfil ?? 'OPERADOR',
+    },
+  }).catch(() => {})
 
   // ── 6. Renderização ───────────────────────────────────────────
   return (

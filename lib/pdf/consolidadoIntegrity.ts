@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto'
  * Hash e payload de QR para PDF consolidado (mesmo espírito do relatório individual).
  */
 export function consolidadoIntegrityParts(input: {
-  gaepId: string
+  /** Um id ou vários (chave estável), inclusive escopo multi-GAEP. */
+  gaepScopeKey: string
   dataInicio: string
   dataFim: string
   categoriaId: string
@@ -15,7 +16,7 @@ export function consolidadoIntegrityParts(input: {
 }): { hash: string; qrPayload: string } {
   const ids = [...input.relatorioIdsOrdenados].sort().join(',')
   const payload = [
-    input.gaepId,
+    input.gaepScopeKey,
     input.dataInicio,
     input.dataFim,
     input.categoriaId,
@@ -25,6 +26,6 @@ export function consolidadoIntegrityParts(input: {
     input.consolidadorNome.trim(),
   ].join('|')
   const hash = createHash('sha256').update(payload, 'utf8').digest('hex').slice(0, 16).toUpperCase()
-  const qrPayload = `GAEP-CAT|CONSOLIDADO|GAEP:${input.gaepId}|PER:${input.dataInicio}–${input.dataFim}|HASH:${hash}`
+  const qrPayload = `GAEP-CAT|CONSOLIDADO|GAEP:${input.gaepScopeKey}|PER:${input.dataInicio}–${input.dataFim}|HASH:${hash}`
   return { hash, qrPayload }
 }

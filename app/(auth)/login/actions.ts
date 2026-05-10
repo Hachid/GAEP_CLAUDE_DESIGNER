@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { logAudit } from '@/lib/audit'
 import { redirect } from 'next/navigation'
 
 export type LoginState = { error: string } | null
@@ -20,7 +21,7 @@ export async function loginAction(
   const senha = (formData.get('senha') as string | null)?.trim() ?? ''
 
   if (!nomeGuerra || !senha) {
-    return { error: 'Informe o nome de guerra e a matrícula.' }
+    return { error: 'Informe o nome de guerra e a senha.' }
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
@@ -35,7 +36,7 @@ export async function loginAction(
   const admin = createAdminClient()
   const { data: rows, error: queryError } = await admin
     .from('operadores')
-    .select('matricula, nome')
+    .select('id, gaep_id, perfil, matricula, nome')
     .is('deleted_at', null)
     .eq('ativo', true)
 
@@ -65,10 +66,6 @@ export async function loginAction(
     return { error: 'Nome de guerra ou matrícula inválidos.' }
   }
 
-  if (senha !== matricula) {
-    return { error: 'A senha deve ser sua matrícula.' }
-  }
-
   const supabase = await createClient()
   const { error } = await supabase.auth.signInWithPassword({
     email: `${matricula}@gaep.internal`,
@@ -78,6 +75,20 @@ export async function loginAction(
   if (error) {
     return { error: 'Nome de guerra ou matrícula inválidos.' }
   }
+
+  const operadorSelecionado = matches[0]
+  await logAudit({
+    gaepId: String(operadorSelecionado.gaep_id ?? ''),
+    operadorId: String(operadorSelecionado.id ?? ''),
+    acao: 'ACESSO',
+    tabela: 'login',
+    dadosDepois: {
+      tela: '/login',
+      evento: 'LOGIN_SUCESSO',
+      perfil: String(operadorSelecionado.perfil ?? ''),
+      nomeGuerra: nomeGuerra,
+    },
+  })
 
   redirect('/relatorio')
 }

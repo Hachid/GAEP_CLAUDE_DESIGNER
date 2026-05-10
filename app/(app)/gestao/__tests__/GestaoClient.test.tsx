@@ -22,6 +22,7 @@ const navMock = vi.hoisted(() => {
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => navMock.searchParams,
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
 }))
 
 vi.mock('@/app/convite/actions', () => ({
@@ -36,6 +37,8 @@ function renderGestao(node: ReactNode) {
 }
 
 vi.mock('../actions', () => ({
+  atualizarMeusDadosPessoais: vi.fn().mockResolvedValue({}),
+  alterarMinhaSenha: vi.fn().mockResolvedValue({}),
   criarOperador: vi.fn().mockResolvedValue({ id: 'new-id' }),
   editarOperador: vi.fn().mockResolvedValue({}),
   toggleAtivoOperador: vi.fn().mockResolvedValue({}),
@@ -52,8 +55,37 @@ vi.mock('../actions', () => ({
   toggleAtivoGaep: vi.fn().mockResolvedValue({}),
 }))
 
+function makeOperador(partial: Partial<OperadorRow> & Pick<OperadorRow, 'id' | 'nome' | 'matricula' | 'perfil'>): OperadorRow {
+  return {
+    id: partial.id,
+    nome: partial.nome,
+    nome_completo: partial.nome_completo ?? null,
+    matricula: partial.matricula,
+    perfil: partial.perfil,
+    equipe: partial.equipe ?? null,
+    ativo: partial.ativo ?? true,
+    email_funcional: partial.email_funcional ?? null,
+    numerica: partial.numerica ?? null,
+    tipo_sanguineo: partial.tipo_sanguineo ?? null,
+    alergia: partial.alergia ?? null,
+    contato_emergencia: partial.contato_emergencia ?? null,
+    nome_contato_emergencia: partial.nome_contato_emergencia ?? null,
+    plano_saude: partial.plano_saude ?? null,
+    numero_carteirinha: partial.numero_carteirinha ?? null,
+    cpf: partial.cpf ?? null,
+    email: partial.email ?? null,
+  }
+}
+
 function baseData(overrides: Partial<GestaoData> = {}): GestaoData {
   return {
+    gestaoModo: 'full',
+    operadorPessoal: makeOperador({
+      id: 'op-admin',
+      nome: 'Gestor',
+      matricula: '12345',
+      perfil: 'ADMIN',
+    }),
     operadorAtual: { id: 'op-admin', nome: 'Gestor', perfil: 'ADMIN' },
     gaep: { id: 'gaep-1', codigo: 'GAEP-CAT', cidade: 'Catanduvas', estado: 'PR' },
     operadores: [],
@@ -86,28 +118,6 @@ function baseData(overrides: Partial<GestaoData> = {}): GestaoData {
   }
 }
 
-function makeOperador(partial: Partial<OperadorRow> & Pick<OperadorRow, 'id' | 'nome' | 'matricula' | 'perfil'>): OperadorRow {
-  return {
-    id: partial.id,
-    nome: partial.nome,
-    nome_completo: partial.nome_completo ?? null,
-    matricula: partial.matricula,
-    perfil: partial.perfil,
-    equipe: partial.equipe ?? null,
-    ativo: partial.ativo ?? true,
-    email_funcional: partial.email_funcional ?? null,
-    numerica: partial.numerica ?? null,
-    tipo_sanguineo: partial.tipo_sanguineo ?? null,
-    alergia: partial.alergia ?? null,
-    contato_emergencia: partial.contato_emergencia ?? null,
-    nome_contato_emergencia: partial.nome_contato_emergencia ?? null,
-    plano_saude: partial.plano_saude ?? null,
-    numero_carteirinha: partial.numero_carteirinha ?? null,
-    cpf: partial.cpf ?? null,
-    email: partial.email ?? null,
-  }
-}
-
 describe('GestaoClient', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -119,12 +129,25 @@ describe('GestaoClient', () => {
     expect(screen.getByText(/Operadores/)).toBeInTheDocument()
   })
 
+  it('com tab=dados-pessoais exibe formulário de dados pessoais e alteração de senha', () => {
+    navMock.setGestaoTab('dados-pessoais')
+    renderGestao(<GestaoClient data={baseData()} />)
+    expect(screen.getByRole('button', { name: /Salvar dados/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Alterar senha$/i })).toBeInTheDocument()
+  })
+
   it('com perfil SUPER_ADMIN exibe aba GAEPs quando tab=gaeps', () => {
     navMock.setGestaoTab('gaeps')
     renderGestao(
       <GestaoClient
         data={baseData({
           operadorAtual: { id: 'op-sa', nome: 'Super', perfil: 'SUPER_ADMIN' },
+          operadorPessoal: makeOperador({
+            id: 'op-sa',
+            nome: 'Super',
+            matricula: '999',
+            perfil: 'SUPER_ADMIN',
+          }),
         })}
       />
     )
@@ -143,6 +166,12 @@ describe('GestaoClient', () => {
       <GestaoClient
         data={baseData({
           operadorAtual: { id: 'op-sa', nome: 'Super', perfil: 'SUPER_ADMIN' },
+          operadorPessoal: makeOperador({
+            id: 'op-sa',
+            nome: 'Super',
+            matricula: '999',
+            perfil: 'SUPER_ADMIN',
+          }),
         })}
       />
     )
@@ -178,7 +207,24 @@ describe('GestaoClient', () => {
     renderGestao(<GestaoClient data={baseData()} />)
     expect(screen.getByText(/Convite ao efetivo/)).toBeInTheDocument()
     expect(screen.getByText(/O link é válido por 7 dias/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Link de Convite/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Gerar link de convite/i })).toBeInTheDocument()
+  })
+
+  it('Super Admin: convite exige escolher GAEP antes de gerar link', () => {
+    const gaeps = [
+      { id: 'g1', codigo: 'GAEP-A', cidade: 'A', estado: 'PR', ativo: true },
+      { id: 'g2', codigo: 'GAEP-B', cidade: 'B', estado: 'SC', ativo: true },
+    ]
+    renderGestao(
+      <GestaoClient
+        data={baseData({
+          operadorAtual: { id: 'sa', nome: 'Super', perfil: 'SUPER_ADMIN' },
+          gaeps,
+        })}
+      />
+    )
+    expect(screen.getByLabelText(/GAEP do convite/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Gerar link de convite/i })).toBeDisabled()
   })
 
   it('TabEfetivo: botão "+ Novo Operador" abre modal', async () => {

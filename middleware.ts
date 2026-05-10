@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient, type CookieMethodsServer } from '@supabase/ssr'
 import { supabaseCookieOptions } from '@/lib/supabase/cookie-options'
+import { isStaleAuthSessionError, supabaseAuthCookieNamesFromList } from '@/lib/supabase/stale-session'
 
 const PUBLIC_PATHS = ['/login', '/convite']
 
@@ -42,12 +43,21 @@ export async function middleware(request: NextRequest) {
     { cookies: cookieMethods, cookieOptions: supabaseCookieOptions }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
 
   if (!user) {
     const loginUrl = request.nextUrl.clone()
     loginUrl.pathname = '/login'
-    return NextResponse.redirect(loginUrl)
+    const redirectRes = NextResponse.redirect(loginUrl)
+    if (isStaleAuthSessionError(authError)) {
+      for (const name of supabaseAuthCookieNamesFromList(request.cookies.getAll())) {
+        redirectRes.cookies.delete(name)
+      }
+    }
+    return redirectRes
   }
 
   return response

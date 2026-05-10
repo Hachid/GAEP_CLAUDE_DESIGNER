@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { getSessionOrThrow } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logAudit } from '@/lib/audit'
+import { emailSistemaFromMatricula } from '@/lib/email-sistema'
 
 export type GerarConviteState = { error?: string; url?: string; expiresAt?: string } | null
 
@@ -36,7 +37,6 @@ function hasCamposComplementares(input: {
   numeroCarteirinha?: string
   cpf?: string
   email?: string
-  emailFuncional?: string
 }) {
   return (
     hasValor(input.nomeCompleto) ||
@@ -48,8 +48,7 @@ function hasCamposComplementares(input: {
     hasValor(input.planoSaude) ||
     hasValor(input.numeroCarteirinha) ||
     hasValor(input.cpf) ||
-    hasValor(input.email) ||
-    hasValor(input.emailFuncional)
+    hasValor(input.email)
   )
 }
 
@@ -80,7 +79,18 @@ export async function gerarConviteEfetivo(gaepId: string): Promise<GerarConviteS
     if (opErr || !op) return { error: 'Operador não encontrado.' }
     const perfil = String(op.perfil)
     if (!['ADMIN', 'SUPER_ADMIN'].includes(perfil)) return { error: 'Acesso negado.' }
-    if (String(op.gaep_id) !== id) return { error: 'GAEP inválido para o seu usuário.' }
+
+    if (perfil === 'SUPER_ADMIN') {
+      const { data: gRow, error: gErr } = await admin
+        .from('gaeps')
+        .select('id')
+        .eq('id', id)
+        .is('deleted_at', null)
+        .maybeSingle<{ id: string }>()
+      if (gErr || !gRow?.id) return { error: 'GAEP não encontrado ou indisponível.' }
+    } else if (String(op.gaep_id) !== id) {
+      return { error: 'GAEP inválido para o seu usuário.' }
+    }
 
     const token = randomBytes(32).toString('base64url')
     const expires = new Date()
@@ -131,7 +141,6 @@ export async function submeterConviteEfetivo(
   const numeroCarteirinha = String(formData.get('numero_carteirinha') ?? '').trim()
   const cpf = String(formData.get('cpf') ?? '').trim()
   const email = String(formData.get('email') ?? '').trim()
-  const emailFuncional = String(formData.get('email_funcional') ?? '').trim()
 
   const complementosInput = {
     nomeCompleto,
@@ -144,15 +153,15 @@ export async function submeterConviteEfetivo(
     numeroCarteirinha,
     cpf,
     email,
-    emailFuncional,
   }
 
   const perfil = 'OPERADOR'
 
-  if (!token || !nome || !matricula || !equipe) {
-    return { error: 'Preencha nome de guerra, matrícula e equipe.' }
+  if (!token || !nome || !matricula) {
+    return { error: 'Preencha nome de guerra e matrícula.' }
   }
-  if (!EQUIPES_VALIDAS.has(equipe)) {
+  const equipeFinal = equipe || 'Alpha'
+  if (!EQUIPES_VALIDAS.has(equipeFinal)) {
     return { error: 'Equipe inválida.' }
   }
 
@@ -191,8 +200,9 @@ export async function submeterConviteEfetivo(
   if (matUsada) return { error: 'Esta matrícula já está cadastrada no sistema.' }
 
   const senhaAuth = senhaField || matricula
+  const emailSistema = emailSistemaFromMatricula(matricula)
   const { data: authData, error: authErr } = await admin.auth.admin.createUser({
-    email: `${matricula}@gaep.internal`,
+    email: emailSistema,
     password: senhaAuth,
     email_confirm: true,
   })
@@ -210,8 +220,8 @@ export async function submeterConviteEfetivo(
     nome_completo: nomeCompleto || null,
     matricula,
     perfil,
-    equipe,
-    email_funcional: emailFuncional || null,
+    equipe: equipeFinal,
+    email_funcional: emailSistema,
     numerica: numerica || null,
     tipo_sanguineo: tipoSanguineo || null,
     alergia: alergia || null,
@@ -241,8 +251,8 @@ export async function submeterConviteEfetivo(
         nome,
         matricula,
         perfil,
-        equipe,
-        email_funcional: emailFuncional || null,
+        equipe: equipeFinal,
+        email_funcional: emailSistema,
         numerica: numerica || null,
         tipo_sanguineo: tipoSanguineo || null,
         alergia: alergia || null,
@@ -269,7 +279,8 @@ export async function submeterConviteEfetivo(
         nome,
         matricula,
         perfil,
-        equipe,
+        equipe: equipeFinal,
+        email_funcional: emailSistema,
         ativo: true,
       })
       .select('id')
@@ -314,8 +325,7 @@ export async function submeterConviteEfetivo(
       campoDivergiu(planoSaude, validacao.plano_saude) ||
       campoDivergiu(numeroCarteirinha, validacao.numero_carteirinha) ||
       campoDivergiu(cpf, validacao.cpf) ||
-      campoDivergiu(email, validacao.email) ||
-      campoDivergiu(emailFuncional, validacao.email_funcional)
+      campoDivergiu(email, validacao.email)
     if (naoPersistiu) {
       await admin.auth.admin.deleteUser(authId)
       await admin

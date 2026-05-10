@@ -61,14 +61,21 @@ describe('lib/cache/queries', () => {
       expect(ch.select).toHaveBeenCalledWith('id, nome')
     })
 
-    it('ordena por nome', async () => {
+    it('ordena categorias por prioridade operacional (TREINAR, OPERAR, INSTRUIR)', async () => {
       const { getCategorias } = await import('../queries')
-      const ch = makeChain({ data: [], error: null })
+      const ch = makeChain({
+        data: [
+          { id: 'c2', nome: 'OPERAR' },
+          { id: 'c3', nome: 'INSTRUIR' },
+          { id: 'c1', nome: 'TREINAR' },
+        ],
+        error: null,
+      })
       mockAdminFrom.mockReturnValue(ch)
 
-      await getCategorias()
+      const result = await getCategorias()
 
-      expect(ch.order).toHaveBeenCalledWith('nome')
+      expect(result.map((c) => c.nome)).toEqual(['TREINAR', 'OPERAR', 'INSTRUIR'])
     })
 
     it('retorna array vazio quando data é null', async () => {

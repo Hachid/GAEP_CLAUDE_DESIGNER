@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import type { DashboardFiltros } from '@/app/(app)/dashboard/types'
+import { useEffect, useState } from 'react'
+import { DASHBOARD_ANALISE_TODOS_GAEPS, type DashboardFiltros } from '@/app/(app)/dashboard/types'
 
 type Props = {
   filtros: DashboardFiltros
@@ -9,11 +9,28 @@ type Props = {
   atividades: { id: string; nome: string }[]
   onAtualizar: (filtros: DashboardFiltros) => void
   loading: boolean
+  /** Super Admin: escopo de GAEP no painel de filtros. */
+  isSuperAdmin?: boolean
+  listaGaepsAnalise?: { id: string; codigo: string }[]
+  gaepCodigoContexto?: string
 }
 
-export function FiltrosDash({ filtros, categorias, atividades, onAtualizar, loading }: Props) {
+export function FiltrosDash({
+  filtros,
+  categorias,
+  atividades,
+  onAtualizar,
+  loading,
+  isSuperAdmin = false,
+  listaGaepsAnalise = [],
+  gaepCodigoContexto = '',
+}: Props) {
   const [open, setOpen] = useState(false)
   const [local, setLocal] = useState<DashboardFiltros>(filtros)
+
+  useEffect(() => {
+    setLocal(filtros)
+  }, [filtros])
 
   function handleCategoriaChange(categoriaId: string) {
     setLocal((prev) => ({ ...prev, categoriaId, atividadeId: '' }))
@@ -35,6 +52,7 @@ export function FiltrosDash({ filtros, categorias, atividades, onAtualizar, load
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
+    minHeight: 44,
     padding: '10px 12px',
     background: '#f3f4f6',
     border: '1px solid #e2e8f0',
@@ -45,6 +63,11 @@ export function FiltrosDash({ filtros, categorias, atividades, onAtualizar, load
     boxSizing: 'border-box',
     fontFamily: 'inherit',
   }
+
+  const escopoSelectValue =
+    local.analiseGaepId === DASHBOARD_ANALISE_TODOS_GAEPS
+      ? DASHBOARD_ANALISE_TODOS_GAEPS
+      : local.analiseGaepId ?? ''
 
   return (
     <div
@@ -88,6 +111,39 @@ export function FiltrosDash({ filtros, categorias, atividades, onAtualizar, load
             animation: 'fadeIn .2s ease',
           }}
         >
+          {isSuperAdmin && listaGaepsAnalise.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <label htmlFor="dash-escopo-gaep" style={labelStyle}>
+                Unidade na análise
+              </label>
+              <select
+                id="dash-escopo-gaep"
+                style={inputStyle}
+                value={escopoSelectValue}
+                onChange={(e) => {
+                  const v = e.target.value
+                  const analiseGaepId =
+                    v === '' ? undefined : v === DASHBOARD_ANALISE_TODOS_GAEPS ? DASHBOARD_ANALISE_TODOS_GAEPS : v
+                  const next = { ...local, analiseGaepId }
+                  setLocal(next)
+                  onAtualizar(next)
+                }}
+              >
+                <option value="">
+                  Minha unidade ({gaepCodigoContexto || 'cadastro'})
+                </option>
+                {listaGaepsAnalise
+                  .filter((g) => g.id)
+                  .map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.codigo}
+                    </option>
+                  ))}
+                <option value={DASHBOARD_ANALISE_TODOS_GAEPS}>Todos os GAEPs</option>
+              </select>
+            </div>
+          )}
+
           <div
             style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}
           >

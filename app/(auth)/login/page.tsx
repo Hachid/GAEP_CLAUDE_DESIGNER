@@ -1,5 +1,7 @@
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { isStaleAuthSessionError, supabaseAuthCookieNamesFromList } from '@/lib/supabase/stale-session'
 import { LoginForm } from './LoginForm'
 
 export const dynamic = 'force-dynamic'
@@ -22,10 +24,18 @@ export default async function LoginPage() {
   const authClient = await createClient()
   const {
     data: { user },
+    error: authError,
   } = await authClient.auth.getUser()
 
   if (user) {
     redirect('/relatorio')
+  }
+
+  if (isStaleAuthSessionError(authError)) {
+    const cookieStore = await cookies()
+    for (const name of supabaseAuthCookieNamesFromList(cookieStore.getAll())) {
+      cookieStore.delete(name)
+    }
   }
 
   return <LoginForm />

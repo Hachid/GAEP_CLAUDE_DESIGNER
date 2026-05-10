@@ -6,8 +6,10 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { SidebarNav } from '@/components/layout/SidebarNav'
 import { DashboardClient } from './DashboardClient'
 import { fetchKPIData, fetchEvolucao } from './actions'
+import { resolveAnaliseGaepIds, gaepIdsToCacheKey } from './gaepScope'
 import type { DashboardFiltros } from './types'
 import { getCategorias, getAtividades } from '@/lib/cache/queries'
+import { logAudit } from '@/lib/audit'
 
 interface OperadorComGaep {
   id: string
@@ -62,6 +64,27 @@ export default async function DashboardPage() {
   const gaep = operadorAtual.gaeps
   if (!gaep) redirect('/relatorio')
 
+  const escopoIdsInicial = await resolveAnaliseGaepIds(
+    admin,
+    String(operadorAtual.perfil ?? 'OPERADOR'),
+    gaep.id,
+    undefined
+  )
+  const escopoKeyInicial = gaepIdsToCacheKey(escopoIdsInicial)
+
+  let listaGaepsAnalise: { id: string; codigo: string }[] = []
+  if (operadorAtual.perfil === 'SUPER_ADMIN') {
+    const { data: gRows } = await admin
+      .from('gaeps')
+      .select('id, codigo')
+      .is('deleted_at', null)
+      .order('codigo')
+    listaGaepsAnalise = (gRows ?? []).map((g: { id: string; codigo: string }) => ({
+      id: String(g.id),
+      codigo: String(g.codigo),
+    }))
+  }
+
   // ── 3. Período padrão: último mês com dados (fallback: mês atual) ──
   const now = new Date()
   let baseDate = now
@@ -92,8 +115,8 @@ export default async function DashboardPage() {
   const [categorias, atividades, kpiInicial, evolucaoInicial, diasUteisRes] = await Promise.all([
     getCategorias(),
     getAtividades(),
-    fetchKPIData(gaep.id, filtrosIniciais),
-    fetchEvolucao(gaep.id),
+    fetchKPIData(escopoKeyInicial, filtrosIniciais),
+    fetchEvolucao(escopoKeyInicial),
     admin
       .from('gaep_dias_uteis')
       .select('referencia_mes, dias_uteis')
@@ -105,6 +128,17 @@ export default async function DashboardPage() {
     referenciaMes: String(r.referencia_mes),
     diasUteis: Number(r.dias_uteis),
   }))
+
+  logAudit({
+    gaepId: gaep.id,
+    operadorId: operadorAtual.id,
+    acao: 'ACESSO',
+    tabela: 'dashboard',
+    dadosDepois: {
+      tela: '/dashboard',
+      perfil: operadorAtual.perfil ?? 'OPERADOR',
+    },
+  }).catch(() => {})
 
   // ── 5. Render ─────────────────────────────────────────────────
   return (
@@ -143,6 +177,9 @@ export default async function DashboardPage() {
             categorias={categorias}
             atividades={atividades}
             diasUteisMesInicial={diasUteisMesInicial}
+            isSuperAdmin={operadorAtual.perfil === 'SUPER_ADMIN'}
+            listaGaepsAnalise={listaGaepsAnalise}
+            gaepCodigoContexto={gaep.nome}
           />
         </div>
       </main>

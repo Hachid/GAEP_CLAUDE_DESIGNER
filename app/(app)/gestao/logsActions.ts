@@ -64,6 +64,7 @@ export async function fetchAuditLogs(params: {
 
     const { data, count, error } = await query
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, to)
 
     if (error) return { rows: [], total: 0, error: error.message }

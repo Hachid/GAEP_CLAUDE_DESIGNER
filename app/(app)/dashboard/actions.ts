@@ -13,6 +13,7 @@ import type {
   EvolucaoMes,
   RelatorioLinhaConsolidado,
 } from './types'
+import { resolveAnaliseGaepIds } from './gaepScope'
 
 type RelRow = {
   id: string
@@ -32,8 +33,28 @@ function pickFirst<T>(value: T | T[] | null | undefined): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value
 }
 
-async function computeKPI(gaepId: string, filtros: DashboardFiltros): Promise<KPIData> {
+function filtrosParaQueryRelatorios(filtros: DashboardFiltros): Omit<DashboardFiltros, 'analiseGaepId'> {
+  return {
+    dataInicio: filtros.dataInicio,
+    dataFim: filtros.dataFim,
+    categoriaId: filtros.categoriaId,
+    atividadeId: filtros.atividadeId,
+  }
+}
+
+async function computeKPIUncached(gaepIds: string[], filtros: DashboardFiltros): Promise<KPIData> {
   const admin = createAdminClient()
+  const fq = filtrosParaQueryRelatorios(filtros)
+  const ids = [...new Set(gaepIds)].filter(Boolean)
+  if (ids.length === 0) {
+    return {
+      totalRegistros: 0,
+      totalMinutos: 0,
+      porCategoria: [],
+      rankingAtividades: [],
+      rankingOperadores: [],
+    }
+  }
 
   let baseQuery = admin
     .from('relatorios')
@@ -42,13 +63,18 @@ async function computeKPI(gaepId: string, filtros: DashboardFiltros): Promise<KP
        atividades!inner(id, nome),
        categorias_atividade(id, nome)`
     )
-    .eq('gaep_id', gaepId)
     .is('deleted_at', null)
-    .gte('data', filtros.dataInicio)
-    .lte('data', filtros.dataFim)
+    .gte('data', fq.dataInicio)
+    .lte('data', fq.dataFim)
 
-  if (filtros.categoriaId) baseQuery = baseQuery.eq('categoria_id', filtros.categoriaId) as typeof baseQuery
-  if (filtros.atividadeId) baseQuery = baseQuery.eq('atividade_id', filtros.atividadeId) as typeof baseQuery
+  if (ids.length === 1) {
+    baseQuery = baseQuery.eq('gaep_id', ids[0]) as typeof baseQuery
+  } else {
+    baseQuery = baseQuery.in('gaep_id', ids) as typeof baseQuery
+  }
+
+  if (fq.categoriaId) baseQuery = baseQuery.eq('categoria_id', fq.categoriaId) as typeof baseQuery
+  if (fq.atividadeId) baseQuery = baseQuery.eq('atividade_id', fq.atividadeId) as typeof baseQuery
 
   const { data } = await baseQuery
 
@@ -146,14 +172,15 @@ async function computeKPI(gaepId: string, filtros: DashboardFiltros): Promise<KP
   }
 }
 
-// Called from page.tsx (server) — gaepId already resolved.
-// Cache de 60 s por (gaepId × filtros). Invalidado via revalidateTag('relatorios-kpi')
-// quando um relatório é salvo, editado ou excluído.
-export const fetchKPIData = unstable_cache(
-  computeKPI,
-  ['kpi-dashboard'],
-  { revalidate: 60, tags: ['relatorios-kpi'] }
-)
+async function computeKPIForCache(gaepIdsKey: string, filtros: DashboardFiltros): Promise<KPIData> {
+  const ids = gaepIdsKey.split(',').filter(Boolean)
+  return computeKPIUncached(ids, filtros)
+}
+
+export const fetchKPIData = unstable_cache(computeKPIForCache, ['kpi-dashboard'], {
+  revalidate: 60,
+  tags: ['relatorios-kpi'],
+})
 
 // Called from DashboardClient (client) — resolves gaepId from auth
 export async function refreshKPIData(
@@ -166,18 +193,45 @@ export async function refreshKPIData(
     const admin = createAdminClient()
     const { data: op } = await admin
       .from('operadores')
-      .select('gaep_id')
+      .select('gaep_id, perfil')
       .eq('auth_id', user.id)
       .is('deleted_at', null)
-      .maybeSingle<{ gaep_id: string }>()
+      .maybeSingle<{ gaep_id: string; perfil: string }>()
 
     if (!op?.gaep_id) return { data: null, error: 'Operador não encontrado' }
 
-    const data = await computeKPI(op.gaep_id, filtros)
+    const ids = await resolveAnaliseGaepIds(admin, String(op.perfil ?? ''), op.gaep_id, filtros.analiseGaepId)
+    const data = await computeKPIUncached(ids, filtros)
     return { data, error: null }
   } catch (err) {
     console.error('[refreshKPIData]', err)
     return { data: null, error: 'Erro ao buscar dados' }
+  }
+}
+
+export async function refreshEvolucaoDashboard(
+  filtros: DashboardFiltros
+): Promise<{ data: EvolucaoMes[] | null; error: string | null }> {
+  try {
+    const user = await getSessionOrThrow().catch(() => null)
+    if (!user) return { data: null, error: 'Não autenticado' }
+
+    const admin = createAdminClient()
+    const { data: op } = await admin
+      .from('operadores')
+      .select('gaep_id, perfil')
+      .eq('auth_id', user.id)
+      .is('deleted_at', null)
+      .maybeSingle<{ gaep_id: string; perfil: string }>()
+
+    if (!op?.gaep_id) return { data: null, error: 'Operador não encontrado' }
+
+    const ids = await resolveAnaliseGaepIds(admin, String(op.perfil ?? ''), op.gaep_id, filtros.analiseGaepId)
+    const data = await fetchEvolucaoUncached(ids)
+    return { data, error: null }
+  } catch (err) {
+    console.error('[refreshEvolucaoDashboard]', err)
+    return { data: null, error: 'Erro ao buscar evolução' }
   }
 }
 
@@ -197,15 +251,21 @@ type RelComPartsRow = {
   relatorio_participantes: PartRow[]
 }
 
-// Cache de 60 s por gaepId. Mesma tag de invalidação do KPI.
-export const fetchEvolucao = unstable_cache(
-  _fetchEvolucaoRaw,
-  ['evolucao-dashboard'],
-  { revalidate: 60, tags: ['relatorios-kpi'] }
-)
+async function fetchEvolucaoForCache(gaepIdsKey: string): Promise<EvolucaoMes[]> {
+  const ids = gaepIdsKey.split(',').filter(Boolean)
+  return fetchEvolucaoUncached(ids)
+}
 
-async function _fetchEvolucaoRaw(gaepId: string): Promise<EvolucaoMes[]> {
+// Cache por chave de GAEP(s). Mesma tag de invalidação do KPI.
+export const fetchEvolucao = unstable_cache(fetchEvolucaoForCache, ['evolucao-dashboard'], {
+  revalidate: 60,
+  tags: ['relatorios-kpi'],
+})
+
+async function fetchEvolucaoUncached(gaepIds: string[]): Promise<EvolucaoMes[]> {
   const admin = createAdminClient()
+  const ids = [...new Set(gaepIds)].filter(Boolean)
+  if (ids.length === 0) return []
 
   const hoje = new Date()
   const dataMaxima = hoje.toISOString().slice(0, 10)
@@ -216,31 +276,44 @@ async function _fetchEvolucaoRaw(gaepId: string): Promise<EvolucaoMes[]> {
   const dataCorte = dataMinima.toISOString().slice(0, 10)
   const mesCorte = dataCorte.slice(0, 7) // "YYYY-MM"
 
-  // Busca relatórios (com participantes) e dias úteis em paralelo
-  const [relRes, diasRes] = await Promise.all([
-    admin
-      .from('relatorios')
-      .select('data, hora_inicio, hora_fim, plantao, data_fim, relatorista_id, relatorio_participantes(operador_id, hora_inicio, hora_fim)')
-      .eq('gaep_id', gaepId)
-      .is('deleted_at', null)
-      .gte('data', dataCorte)
-      .lte('data', dataMaxima)
-      .order('data'),
-    admin
-      .from('gaep_dias_uteis')
-      .select('referencia_mes, dias_uteis')
-      .eq('gaep_id', gaepId)
-      .gte('referencia_mes', mesCorte)
-      .lte('referencia_mes', mesAtual),
-  ])
+  let relQuery = admin
+    .from('relatorios')
+    .select(
+      'data, hora_inicio, hora_fim, plantao, data_fim, relatorista_id, relatorio_participantes(operador_id, hora_inicio, hora_fim)'
+    )
+    .is('deleted_at', null)
+    .gte('data', dataCorte)
+    .lte('data', dataMaxima)
+    .order('data')
+
+  if (ids.length === 1) {
+    relQuery = relQuery.eq('gaep_id', ids[0]) as typeof relQuery
+  } else {
+    relQuery = relQuery.in('gaep_id', ids) as typeof relQuery
+  }
+
+  let diasQuery = admin
+    .from('gaep_dias_uteis')
+    .select('referencia_mes, dias_uteis')
+    .gte('referencia_mes', mesCorte)
+    .lte('referencia_mes', mesAtual)
+
+  if (ids.length === 1) {
+    diasQuery = diasQuery.eq('gaep_id', ids[0]) as typeof diasQuery
+  } else {
+    diasQuery = diasQuery.in('gaep_id', ids) as typeof diasQuery
+  }
+
+  const [relRes, diasRes] = await Promise.all([relQuery, diasQuery])
 
   const rows = (relRes.data ?? []) as RelComPartsRow[]
 
   // Mapa mês → minutos previstos (dias_uteis × 7h × 60min)
   const MINS_POR_DIA = 7 * 60
   const previstosMap = new Map<string, number>()
-  for (const d of ((diasRes.data ?? []) as Array<{ referencia_mes: string; dias_uteis: number }>)) {
-    previstosMap.set(d.referencia_mes, d.dias_uteis * MINS_POR_DIA)
+  for (const d of (diasRes.data ?? []) as Array<{ referencia_mes: string; dias_uteis: number }>) {
+    const chunk = d.dias_uteis * MINS_POR_DIA
+    previstosMap.set(d.referencia_mes, (previstosMap.get(d.referencia_mes) ?? 0) + chunk)
   }
 
   // Agrupa por mês — horas reais por participante
@@ -329,11 +402,15 @@ async function _fetchEvolucaoRaw(gaepId: string): Promise<EvolucaoMes[]> {
  * Relatórios no período/filtros para corpo do PDF consolidado (só servidor, após auth na rota).
  */
 export async function fetchRelatoriosParaConsolidadoPdf(
-  gaepId: string,
+  gaepIds: string[],
   filtros: DashboardFiltros
 ): Promise<RelatorioLinhaConsolidado[]> {
   await getSessionOrThrow()
   const admin = createAdminClient()
+  const ids = [...new Set(gaepIds)].filter(Boolean)
+  if (ids.length === 0) return []
+
+  const fq = filtrosParaQueryRelatorios(filtros)
 
   let q = admin
     .from('relatorios')
@@ -342,14 +419,19 @@ export async function fetchRelatoriosParaConsolidadoPdf(
        atividades(id, nome),
        categorias_atividade(id, nome)`
     )
-    .eq('gaep_id', gaepId)
     .is('deleted_at', null)
-    .gte('data', filtros.dataInicio)
-    .lte('data', filtros.dataFim)
+    .gte('data', fq.dataInicio)
+    .lte('data', fq.dataFim)
     .order('data', { ascending: true })
 
-  if (filtros.categoriaId) q = q.eq('categoria_id', filtros.categoriaId) as typeof q
-  if (filtros.atividadeId) q = q.eq('atividade_id', filtros.atividadeId) as typeof q
+  if (ids.length === 1) {
+    q = q.eq('gaep_id', ids[0]) as typeof q
+  } else {
+    q = q.in('gaep_id', ids) as typeof q
+  }
+
+  if (fq.categoriaId) q = q.eq('categoria_id', fq.categoriaId) as typeof q
+  if (fq.atividadeId) q = q.eq('atividade_id', fq.atividadeId) as typeof q
 
   const { data, error } = await q
   if (error || !data) {

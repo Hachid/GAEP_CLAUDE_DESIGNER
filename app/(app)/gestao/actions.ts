@@ -1,7 +1,10 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { getSessionOrThrow } from '@/lib/auth'
+import { validateNovaSenhaGaep } from '@/lib/password-policy'
+import { emailSistemaFromMatricula } from '@/lib/email-sistema'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { logAudit } from '@/lib/audit'
 
@@ -34,7 +37,6 @@ function hasCamposComplementares(input: {
   numeroCarteirinha?: string
   cpf?: string
   email?: string
-  emailFuncional?: string
 }) {
   return (
     hasValor(input.nomeCompleto) ||
@@ -46,8 +48,7 @@ function hasCamposComplementares(input: {
     hasValor(input.planoSaude) ||
     hasValor(input.numeroCarteirinha) ||
     hasValor(input.cpf) ||
-    hasValor(input.email) ||
-    hasValor(input.emailFuncional)
+    hasValor(input.email)
   )
 }
 
@@ -136,7 +137,6 @@ export async function criarOperador(input: {
   numeroCarteirinha?: string
   cpf?: string
   email?: string
-  emailFuncional?: string
 }): Promise<{ id?: string; error?: string }> {
   try {
     const { admin, operadorId: adminId, perfil: ctxPerfil } = await getAdminCtx()
@@ -155,8 +155,10 @@ export async function criarOperador(input: {
     }
 
     const senha = input.senha.trim() || '1234'
+    const matriculaLimpa = input.matricula.trim()
+    const emailSistema = emailSistemaFromMatricula(matriculaLimpa)
     const { data: authData, error: authErr } = await admin.auth.admin.createUser({
-      email: `${input.matricula.trim()}@gaep.internal`,
+      email: emailSistema,
       password: senha,
       email_confirm: true,
     })
@@ -167,10 +169,10 @@ export async function criarOperador(input: {
       auth_id: authData.user.id,
       nome: input.nome.trim(),
       nome_completo: input.nomeCompleto?.trim() || null,
-      matricula: input.matricula.trim(),
+      matricula: matriculaLimpa,
       perfil: perfilEfetivo,
       equipe: input.equipe || null,
-      email_funcional: input.emailFuncional?.trim() || null,
+      email_funcional: emailSistema,
       numerica: input.numerica?.trim() || null,
       tipo_sanguineo: input.tipoSanguineo?.trim() || null,
       alergia: input.alergia?.trim() || null,
@@ -198,10 +200,10 @@ export async function criarOperador(input: {
           gaep_id: input.gaepId,
           auth_id: authData.user.id,
           nome: input.nome.trim(),
-          matricula: input.matricula.trim(),
+          matricula: matriculaLimpa,
           perfil: perfilEfetivo,
           equipe: input.equipe || null,
-          email_funcional: input.emailFuncional?.trim() || null,
+          email_funcional: emailSistema,
           numerica: input.numerica?.trim() || null,
           tipo_sanguineo: input.tipoSanguineo?.trim() || null,
           alergia: input.alergia?.trim() || null,
@@ -226,9 +228,10 @@ export async function criarOperador(input: {
           gaep_id: input.gaepId,
           auth_id: authData.user.id,
           nome: input.nome.trim(),
-          matricula: input.matricula.trim(),
+          matricula: matriculaLimpa,
           perfil: perfilEfetivo,
           equipe: input.equipe || null,
+          email_funcional: emailSistema,
           ativo: true,
         })
         .select('id')
@@ -262,8 +265,7 @@ export async function criarOperador(input: {
         campoDivergiu(input.planoSaude, validacao.plano_saude) ||
         campoDivergiu(input.numeroCarteirinha, validacao.numero_carteirinha) ||
         campoDivergiu(input.cpf, validacao.cpf) ||
-        campoDivergiu(input.email, validacao.email) ||
-        campoDivergiu(input.emailFuncional, validacao.email_funcional)
+        campoDivergiu(input.email, validacao.email)
       if (naoPersistiu) {
         return { error: 'Campos complementares não persistiram. Aplique a migration de operadores no banco.' }
       }
@@ -301,7 +303,6 @@ export async function editarOperador(
     numeroCarteirinha?: string
     cpf?: string
     email?: string
-    emailFuncional?: string
   }
 ): Promise<ActionResult> {
   try {
@@ -315,6 +316,16 @@ export async function editarOperador(
       return { error: 'Perfil inválido.' }
     }
 
+    const { data: rowMat, error: matErr } = await admin
+      .from('operadores')
+      .select('matricula')
+      .eq('id', id)
+      .maybeSingle<{ matricula: string }>()
+    if (matErr) return { error: matErr.message }
+
+    const matriculaFinal = (updates.matricula?.trim() || String(rowMat?.matricula ?? '')).trim()
+    const emailSistema = matriculaFinal ? emailSistemaFromMatricula(matriculaFinal) : null
+
     const pediuCamposComplementares = hasCamposComplementares(updates)
 
     const updateCompleto: Record<string, unknown> = {
@@ -322,7 +333,7 @@ export async function editarOperador(
       nome_completo: updates.nomeCompleto?.trim() || null,
       matricula: updates.matricula?.trim() || undefined,
       equipe: updates.equipe || null,
-      email_funcional: updates.emailFuncional?.trim() || null,
+      email_funcional: emailSistema,
       numerica: updates.numerica?.trim() || null,
       tipo_sanguineo: updates.tipoSanguineo?.trim() || null,
       alergia: updates.alergia?.trim() || null,
@@ -351,6 +362,7 @@ export async function editarOperador(
         nome: updates.nome.trim(),
         matricula: updates.matricula?.trim() || undefined,
         equipe: updates.equipe || null,
+        ...(emailSistema ? { email_funcional: emailSistema } : {}),
       }
       if (podeAlterarPerfil) {
         fallbackPayload.perfil = updates.perfil
@@ -381,8 +393,7 @@ export async function editarOperador(
         campoDivergiu(updates.planoSaude, validacao.plano_saude) ||
         campoDivergiu(updates.numeroCarteirinha, validacao.numero_carteirinha) ||
         campoDivergiu(updates.cpf, validacao.cpf) ||
-        campoDivergiu(updates.email, validacao.email) ||
-        campoDivergiu(updates.emailFuncional, validacao.email_funcional)
+        campoDivergiu(updates.email, validacao.email)
       if (naoPersistiu) {
         return { error: 'Campos complementares não persistiram. Aplique a migration de operadores no banco.' }
       }
@@ -1122,6 +1133,156 @@ export async function importarRelatoriosCsv(csvContent: string): Promise<{
     revalidatePath('/gestao')
     revalidatePath('/relatorio')
     return { inserted, updated, skipped, errors }
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+// ── Dados pessoais (próprio operador) ─────────────────────────
+
+async function getSelfOperadorCtx(): Promise<{
+  admin: ReturnType<typeof createAdminClient>
+  authUserId: string
+  operadorId: string
+  matricula: string
+  gaepId: string
+}> {
+  const user = await getSessionOrThrow()
+  const admin = createAdminClient()
+  const { data: op, error } = await admin
+    .from('operadores')
+    .select('id, matricula, gaep_id')
+    .eq('auth_id', user.id)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (error || !op) throw new Error('Operador não encontrado.')
+
+  const matricula = String(op.matricula ?? '').trim()
+  if (!matricula) throw new Error('Matrícula não cadastrada.')
+
+  return {
+    admin,
+    authUserId: user.id,
+    operadorId: String(op.id),
+    matricula,
+    gaepId: String(op.gaep_id),
+  }
+}
+
+export async function atualizarMeusDadosPessoais(updates: {
+  nome: string
+  nomeCompleto?: string
+  numerica?: string
+  tipoSanguineo?: string
+  alergia?: string
+  contatoEmergencia?: string
+  nomeContatoEmergencia?: string
+  planoSaude?: string
+  numeroCarteirinha?: string
+  cpf?: string
+  email?: string
+}): Promise<ActionResult> {
+  try {
+    const { admin, operadorId, gaepId } = await getSelfOperadorCtx()
+    const nomeLimpo = updates.nome.trim()
+    if (!nomeLimpo) return { error: 'Informe o nome de guerra.' }
+
+    const updateCompleto: Record<string, unknown> = {
+      nome: nomeLimpo,
+      nome_completo: updates.nomeCompleto?.trim() || null,
+      numerica: updates.numerica?.trim() || null,
+      tipo_sanguineo: updates.tipoSanguineo?.trim() || null,
+      alergia: updates.alergia?.trim() || null,
+      contato_emergencia: updates.contatoEmergencia?.trim() || null,
+      nome_contato_emergencia: updates.nomeContatoEmergencia?.trim() || null,
+      plano_saude: updates.planoSaude?.trim() || null,
+      numero_carteirinha: updates.numeroCarteirinha?.trim() || null,
+      cpf: updates.cpf?.trim() || null,
+      email: updates.email?.trim() || null,
+    }
+
+    let { error } = await admin.from('operadores').update(updateCompleto).eq('id', operadorId)
+
+    if (error) {
+      const retryPayload = { ...updateCompleto }
+      delete retryPayload.nome_completo
+      const retry = await admin.from('operadores').update(retryPayload).eq('id', operadorId)
+      error = retry.error
+    }
+
+    if (error) {
+      const fallback = await admin
+        .from('operadores')
+        .update({ nome: nomeLimpo })
+        .eq('id', operadorId)
+      error = fallback.error
+    }
+
+    if (error) return { error: error.message }
+
+    revalidatePath('/gestao')
+    logAudit({
+      gaepId,
+      operadorId,
+      acao: 'UPDATE',
+      tabela: 'operadores',
+      registroId: operadorId,
+      dadosDepois: { escopo: 'dados_pessoais_proprio' },
+    }).catch(() => {})
+    return {}
+  } catch (e) {
+    return { error: (e as Error).message }
+  }
+}
+
+export async function alterarMinhaSenha(input: {
+  senhaAtual: string
+  novaSenha: string
+  confirmacao: string
+}): Promise<ActionResult> {
+  try {
+    const senhaAtual = input.senhaAtual.trim()
+    const novaSenha = input.novaSenha.trim()
+    const confirmacao = input.confirmacao.trim()
+
+    if (!senhaAtual || !novaSenha || !confirmacao) {
+      return { error: 'Preencha senha atual, nova senha e confirmação.' }
+    }
+    if (novaSenha !== confirmacao) {
+      return { error: 'A nova senha e a confirmação não coincidem.' }
+    }
+
+    const valid = validateNovaSenhaGaep(novaSenha)
+    if (!valid.ok) return { error: valid.message }
+
+    const { admin, authUserId, matricula, operadorId, gaepId } = await getSelfOperadorCtx()
+    const email = `${matricula}@gaep.internal`
+
+    const supabase = await createClient()
+    const { error: signErr } = await supabase.auth.signInWithPassword({
+      email,
+      password: senhaAtual,
+    })
+    if (signErr) {
+      return { error: 'Senha atual incorreta.' }
+    }
+
+    const { error: updErr } = await admin.auth.admin.updateUserById(authUserId, {
+      password: novaSenha,
+    })
+    if (updErr) return { error: updErr.message }
+
+    revalidatePath('/gestao')
+    logAudit({
+      gaepId,
+      operadorId,
+      acao: 'UPDATE',
+      tabela: 'auth',
+      registroId: authUserId,
+      dadosDepois: { escopo: 'alteracao_senha' },
+    }).catch(() => {})
+    return {}
   } catch (e) {
     return { error: (e as Error).message }
   }

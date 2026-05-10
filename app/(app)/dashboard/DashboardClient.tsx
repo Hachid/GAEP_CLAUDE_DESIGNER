@@ -5,7 +5,7 @@ import { useVariavelMes } from '@/lib/variavelMes'
 import dynamic from 'next/dynamic'
 import { FiltrosDash } from '@/components/dashboard/FiltrosDash'
 import { KPIGrid } from '@/components/dashboard/KPIGrid'
-import { refreshKPIData } from './actions'
+import { refreshKPIData, refreshEvolucaoDashboard } from './actions'
 import type { KPIData, DashboardFiltros, EvolucaoMes } from './types'
 
 // Recharts usa APIs de browser — ssr:false sem loading evita mismatch de hidratação
@@ -30,6 +30,9 @@ type Props = {
   atividades: { id: string; nome: string }[]
   /** Sincroniza dias úteis no contexto global (variável do mês). */
   diasUteisMesInicial?: { referenciaMes: string; diasUteis: number }[]
+  isSuperAdmin?: boolean
+  listaGaepsAnalise?: { id: string; codigo: string }[]
+  gaepCodigoContexto?: string
 }
 
 const cardStyle: React.CSSProperties = {
@@ -58,8 +61,12 @@ export function DashboardClient({
   categorias,
   atividades,
   diasUteisMesInicial = [],
+  isSuperAdmin = false,
+  listaGaepsAnalise = [],
+  gaepCodigoContexto = '',
 }: Props) {
   const [kpi, setKpi] = useState<KPIData>(kpiInicial)
+  const [evolucao, setEvolucao] = useState<EvolucaoMes[]>(evolucaoInicial)
   const [filtros, setFiltros] = useState<DashboardFiltros>(filtrosIniciais)
   const [erroFiltro, setErroFiltro] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -79,11 +86,19 @@ export function DashboardClient({
     setFiltros(novosFiltros)
     setErroFiltro(null)
     startTransition(async () => {
-      const result = await refreshKPIData(novosFiltros)
+      const [result, evoRes] = await Promise.all([
+        refreshKPIData(novosFiltros),
+        refreshEvolucaoDashboard(novosFiltros),
+      ])
       if (result.error) {
         setErroFiltro(result.error)
       } else if (result.data) {
         setKpi(result.data)
+      }
+      if (evoRes.error) {
+        setErroFiltro((prev) => prev ?? evoRes.error)
+      } else if (evoRes.data) {
+        setEvolucao(evoRes.data)
       }
     })
   }
@@ -94,6 +109,7 @@ export function DashboardClient({
     p.set('dataFim', filtros.dataFim)
     if (filtros.categoriaId) p.set('categoriaId', filtros.categoriaId)
     if (filtros.atividadeId) p.set('atividadeId', filtros.atividadeId)
+    if (filtros.analiseGaepId) p.set('analiseGaepId', filtros.analiseGaepId)
     window.open(`/api/pdf/consolidado?${p.toString()}`, '_blank', 'noopener,noreferrer')
   }, [filtros])
 
@@ -105,6 +121,9 @@ export function DashboardClient({
         atividades={atividades}
         onAtualizar={handleAtualizar}
         loading={isPending}
+        isSuperAdmin={isSuperAdmin}
+        listaGaepsAnalise={listaGaepsAnalise}
+        gaepCodigoContexto={gaepCodigoContexto}
       />
 
       {erroFiltro && (
@@ -141,6 +160,7 @@ export function DashboardClient({
           letterSpacing: 0.4,
           cursor: 'pointer',
           boxShadow: '0 4px 14px rgba(15,23,42,0.18)',
+          minHeight: 44,
         }}
       >
         Gerar consolidado PDF
@@ -157,7 +177,7 @@ export function DashboardClient({
         <RankingBars data={kpi.rankingAtividades} />
       </div>
 
-      <EvolucaoLinhas evolucao={evolucaoInicial} />
+      <EvolucaoLinhas evolucao={evolucao} />
     </div>
   )
 }

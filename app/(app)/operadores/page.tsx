@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { SidebarNav } from '@/components/layout/SidebarNav'
 import { DesempenhoClient } from './DesempenhoClient'
+import { logAudit } from '@/lib/audit'
 
 interface OperadorComGaep {
   id: string
@@ -79,6 +80,17 @@ export default async function DesempenhoPage() {
     id: o.id,
     nome: o.nome_guerra,
   }))
+
+  logAudit({
+    gaepId: gaep.id,
+    operadorId: operadorAtual.id,
+    acao: 'ACESSO',
+    tabela: 'operadores',
+    dadosDepois: {
+      tela: '/operadores',
+      perfil: operadorAtual.perfil ?? 'OPERADOR',
+    },
+  }).catch(() => {})
 
   // ── 4. Render ─────────────────────────────────────────────────
   return (
